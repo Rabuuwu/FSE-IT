@@ -11,25 +11,36 @@ const app = express();
 app.use((req, res, next) => {
     // Allow requests from your Netlify domain and localhost for development
     const allowedOrigins = [
-        'https://fse-it.netlify.app',
+        'https://fse-it.netlify.app', // Alternative domain if you change it
         'http://localhost:3000',
         'http://127.0.0.1:3000',
         'http://localhost:5500', // Live Server default port
-        'http://127.0.0.1:5500'
+        'http://127.0.0.1:5500',
+        'http://localhost:8080',
+        'http://127.0.0.1:8080'
     ];
     
     const origin = req.headers.origin;
+    console.log(`CORS: Request from origin: ${origin}`);
+    
     if (allowedOrigins.includes(origin)) {
         res.setHeader('Access-Control-Allow-Origin', origin);
+        console.log(`CORS: Allowed origin ${origin}`);
+    } else {
+        // For production, allow the main Netlify domain as fallback
+        res.setHeader('Access-Control-Allow-Origin', 'https://fse-it.netlify.app');
+        console.log(`CORS: Unknown origin ${origin}, using default Netlify domain`);
     }
     
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
     res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Max-Age', '86400'); // 24 hours
     
     // Handle preflight requests
     if (req.method === 'OPTIONS') {
-        res.sendStatus(200);
+        console.log('CORS: Handling preflight OPTIONS request');
+        res.status(200).end();
         return;
     }
     
