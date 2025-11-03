@@ -6,6 +6,36 @@ import jwt from 'jsonwebtoken';
 import { authMiddleware } from './auth.js';
 
 const app = express();
+
+// CORS middleware for production deployment
+app.use((req, res, next) => {
+    // Allow requests from your Netlify domain and localhost for development
+    const allowedOrigins = [
+        'https://papaya-cheesecake-032ebf.netlify.app',
+        'http://localhost:3000',
+        'http://127.0.0.1:3000',
+        'http://localhost:5500', // Live Server default port
+        'http://127.0.0.1:5500'
+    ];
+    
+    const origin = req.headers.origin;
+    if (allowedOrigins.includes(origin)) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+    }
+    
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    
+    // Handle preflight requests
+    if (req.method === 'OPTIONS') {
+        res.sendStatus(200);
+        return;
+    }
+    
+    next();
+});
+
 app.use(express.json());
 
 const PORT = process.env.PORT || 3000;

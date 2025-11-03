@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FSE-IT - Login</title>
     <link rel="stylesheet" href="css/login.css">
+    <script src="config.js"></script>
 </head>
 <body>
     <div class="container">
@@ -29,7 +30,7 @@
     </div>
 
     <script>
-        const API_BASE = 'http://localhost:3000';
+        const API_BASE = window.API_CONFIG.BASE_URL;
         
         // Check if already logged in
         if (localStorage.getItem('jwt_token')) {

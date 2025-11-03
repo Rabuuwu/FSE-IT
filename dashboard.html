@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FSE-IT - Dashboard</title>
     <link rel="stylesheet" href="css/dashboard.css">
+    <script src="config.js"></script>
 </head>
 <body>
     <div class="header">
@@ -45,7 +46,7 @@
     </div>
 
     <script>
-        const API_BASE = 'http://localhost:3000';
+        const API_BASE = window.API_CONFIG.BASE_URL;
         let currentUser = null;
         
         // Check authentication on page load
