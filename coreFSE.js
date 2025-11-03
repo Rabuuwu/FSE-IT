@@ -11,7 +11,7 @@ const app = express();
 app.use((req, res, next) => {
     // Allow requests from your Netlify domain and localhost for development
     const allowedOrigins = [
-        'https://papaya-cheesecake-032ebf.netlify.app',
+        'https://fse-it.netlify.app',
         'http://localhost:3000',
         'http://127.0.0.1:3000',
         'http://localhost:5500', // Live Server default port
