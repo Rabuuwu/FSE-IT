@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import sql from './db.js';
+import pool from './db.js';
 import express from 'express';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
@@ -14,22 +14,22 @@ const SALT_ROUNDS = Number(process.env.BCRYPT_SALT_ROUNDS) || 10;
 // Ensure users table exists
 async function ensureSchema() {
     try {
-        await sql.query(`CREATE TABLE IF NOT EXISTS users (
+        await pool.query(`CREATE TABLE IF NOT EXISTS users (
             id SERIAL PRIMARY KEY,
             email TEXT UNIQUE NOT NULL,
             password_hash TEXT NOT NULL,
             created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
         )`);
         // ensure role column exists for JWT payloads
-        await sql.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'user'`);
+        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'user'`);
         // resources table for storing user-owned resources
-        await sql.query(`CREATE TABLE IF NOT EXISTS resources (
+        await pool.query(`CREATE TABLE IF NOT EXISTS resources (
             id SERIAL PRIMARY KEY,
             owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
             data JSONB,
             created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
         )`);
-        console.log('Users table is ready');
+        console.log('Schema tables are ready');
     } catch (err) {
         console.error('Error ensuring schema:', err);
         throw err;
@@ -47,7 +47,7 @@ app.post('/register', async (req, res) => {
 
         const password_hash = await bcrypt.hash(password, SALT_ROUNDS);
 
-        const inserted = await sql.query(
+        const inserted = await pool.query(
             'INSERT INTO users (email, password_hash) VALUES ($1, $2) RETURNING id, email, created_at',
             [email, password_hash]
         );
@@ -73,7 +73,7 @@ app.post('/login', async (req, res) => {
             return res.status(400).json({ error: 'email and password are required' });
         }
 
-        const result = await sql.query('SELECT id, password_hash, role FROM users WHERE email = $1', [email]);
+        const result = await pool.query('SELECT id, password_hash, role FROM users WHERE email = $1', [email]);
         if (!result.rows || result.rows.length === 0) {
             return res.status(401).json({ error: 'Invalid email or password' });
         }
@@ -109,7 +109,7 @@ app.get('/me', authMiddleware, (req, res) => {
 app.get('/resources', authMiddleware, async (req, res) => {
     try {
         const userId = req.user && req.user.user_id;
-        const result = await sql.query(
+        const result = await pool.query(
             'SELECT id, owner_id, data, created_at FROM resources WHERE owner_id = $1 ORDER BY created_at DESC',
             [userId]
         );
@@ -127,7 +127,7 @@ app.post('/resources', authMiddleware, async (req, res) => {
         const userId = req.user && req.user.user_id;
         const { data } = req.body || {};
 
-        const inserted = await sql.query(
+        const inserted = await pool.query(
             'INSERT INTO resources (owner_id, data) VALUES ($1, $2) RETURNING id, owner_id, data, created_at',
             [userId, data || null]
         );
@@ -143,7 +143,7 @@ async function start() {
     try {
         await ensureSchema();
         // quick DB sanity check
-        await sql`SELECT 1`;
+        await pool.query('SELECT 1');
         app.listen(PORT, () => console.log(`Server listening on port ${PORT}`));
     } catch (err) {
         console.error('Failed to start application:', err);
