@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FSE-IT - Dashboard</title>
+    <link rel="stylesheet" href="css/dashboard.css">
+</head>
+<body>
+    <div class="header">
+        <div class="header-content">
+            <h1>FSE-IT Dashboard</h1>
+            <div>
+                <span class="user-info" id="userInfo">Loading...</span>
+                <button class="logout-btn" onclick="logout()">Logout</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="section">
+            <div class="resources-header">
+                <h2>My Resources</h2>
+                <button class="btn" onclick="toggleResourceForm()">Add New Resource</button>
+            </div>
+            
+            <div id="resourceForm" class="resource-form">
+                <form id="addResourceForm">
+                    <div class="form-group">
+                        <label for="resourceData">Resource Data (JSON format):</label>
+                        <textarea id="resourceData" name="data" placeholder='{"title": "My Resource", "description": "Some description", "value": 123}'></textarea>
+                    </div>
+                    <button type="submit" class="btn" id="addBtn">Add Resource</button>
+                    <button type="button" class="btn" onclick="toggleResourceForm()" style="background: #95a5a6;">Cancel</button>
+                </form>
+            </div>
+            
+            <div id="error" class="error"></div>
+            <div id="success" class="success"></div>
+            
+            <div id="resourcesList" class="resources-list">
+                <div class="loading">Loading resources...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:3000';
+        let currentUser = null;
+        
+        // Check authentication on page load
+        window.addEventListener('DOMContentLoaded', () => {
+            const token = localStorage.getItem('jwt_token');
+            if (!token) {
+                window.location.href = 'login.html';
+                return;
+            }
+            
+            loadUserInfo();
+            loadResources();
+        });
+        
+        // Load current user information
+        async function loadUserInfo() {
+            try {
+                const token = localStorage.getItem('jwt_token');
+                const response = await fetch(`${API_BASE}/me`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    currentUser = data.user;
+                    document.getElementById('userInfo').textContent = `User ID: ${currentUser.user_id} | Role: ${currentUser.role}`;
+                } else {
+                    throw new Error('Failed to load user info');
+                }
+            } catch (error) {
+                console.error('Error loading user info:', error);
+                document.getElementById('userInfo').textContent = 'Error loading user info';
+            }
+        }
+        
+        // Load user resources
+        async function loadResources() {
+            try {
+                const token = localStorage.getItem('jwt_token');
+                const response = await fetch(`${API_BASE}/resources`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    displayResources(data.resources);
+                } else if (response.status === 401) {
+                    // Token expired or invalid
+                    logout();
+                } else {
+                    throw new Error('Failed to load resources');
+                }
+            } catch (error) {
+                console.error('Error loading resources:', error);
+                showError('Failed to load resources. Please try refreshing the page.');
+            }
+        }
+        
+        // Display resources in the UI
+        function displayResources(resources) {
+            const resourcesList = document.getElementById('resourcesList');
+            
+            if (resources.length === 0) {
+                resourcesList.innerHTML = '<div class="empty-state">No resources found. Add your first resource!</div>';
+                return;
+            }
+            
+            resourcesList.innerHTML = resources.map(resource => `
+                <div class="resource-item">
+                    <div class="resource-meta">
+                        <span>ID: ${resource.id}</span>
+                        <span>Created: ${new Date(resource.created_at).toLocaleString()}</span>
+                    </div>
+                    <div class="resource-data">${JSON.stringify(resource.data, null, 2)}</div>
+                </div>
+            `).join('');
+        }
+        
+        // Toggle resource form visibility
+        function toggleResourceForm() {
+            const form = document.getElementById('resourceForm');
+            const isVisible = form.style.display === 'block';
+            form.style.display = isVisible ? 'none' : 'block';
+            
+            if (!isVisible) {
+                document.getElementById('resourceData').focus();
+            } else {
+                document.getElementById('resourceData').value = '';
+                clearMessages();
+            }
+        }
+        
+        // Handle add resource form submission
+        document.getElementById('addResourceForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const resourceDataInput = document.getElementById('resourceData');
+            const addBtn = document.getElementById('addBtn');
+            
+            let resourceData;
+            try {
+                // Parse JSON data
+                const jsonString = resourceDataInput.value.trim();
+                resourceData = jsonString ? JSON.parse(jsonString) : null;
+            } catch (error) {
+                showError('Invalid JSON format. Please check your data.');
+                return;
+            }
+            
+            // Disable button during request
+            addBtn.disabled = true;
+            addBtn.textContent = 'Adding...';
+            clearMessages();
+            
+            try {
+                const token = localStorage.getItem('jwt_token');
+                const response = await fetch(`${API_BASE}/resources`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ data: resourceData })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    showSuccess('Resource added successfully!');
+                    resourceDataInput.value = '';
+                    toggleResourceForm();
+                    loadResources(); // Refresh the list
+                } else if (response.status === 401) {
+                    logout();
+                } else {
+                    const errorData = await response.json();
+                    showError(errorData.error || 'Failed to add resource');
+                }
+            } catch (error) {
+                console.error('Error adding resource:', error);
+                showError('Network error. Please try again.');
+            } finally {
+                addBtn.disabled = false;
+                addBtn.textContent = 'Add Resource';
+            }
+        });
+        
+        // Utility functions
+        function showError(message) {
+            const errorDiv = document.getElementById('error');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+            setTimeout(() => {
+                errorDiv.style.display = 'none';
+            }, 5000);
+        }
+        
+        function showSuccess(message) {
+            const successDiv = document.getElementById('success');
+            successDiv.textContent = message;
+            successDiv.style.display = 'block';
+            setTimeout(() => {
+                successDiv.style.display = 'none';
+            }, 3000);
+        }
+        
+        function clearMessages() {
+            document.getElementById('error').style.display = 'none';
+            document.getElementById('success').style.display = 'none';
+        }
+        
+        function logout() {
+            localStorage.removeItem('jwt_token');
+            window.location.href = 'login.html';
+        }
+    </script>
+</body>
+</html>

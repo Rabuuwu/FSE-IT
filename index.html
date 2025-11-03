@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FSE-IT - Home</title>
+    <link rel="stylesheet" href="css/index.css">
+</head>
+<body>
+    <div class="container">
+        <h1>FSE-IT API</h1>
+        <p>Welcome to the FSE-IT API frontend. Please choose an option:</p>
+        <a href="register.html" class="btn">Register</a>
+        <a href="login.html" class="btn secondary">Login</a>
+    </div>
+
+    <script>
+        // Check if user is already logged in
+        const token = localStorage.getItem('jwt_token');
+        if (token) {
+            window.location.href = 'dashboard.html';
+        }
+    </script>
+</body>
+</html>
