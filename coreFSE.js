@@ -11,6 +11,21 @@ app.use(express.json());
 const PORT = process.env.PORT || 3000;
 const SALT_ROUNDS = Number(process.env.BCRYPT_SALT_ROUNDS) || 10;
 
+// Root route
+app.get('/', (req, res) => {
+    res.json({ 
+        message: 'FSE-IT API Server',
+        version: '1.0.0',
+        endpoints: {
+            'POST /register': 'Register a new user',
+            'POST /login': 'Login user',
+            'GET /me': 'Get current user info (requires auth)',
+            'GET /resources': 'Get user resources (requires auth)',
+            'POST /resources': 'Create user resource (requires auth)'
+        }
+    });
+});
+
 // Ensure users table exists
 async function ensureSchema() {
     try {
