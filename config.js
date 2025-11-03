@@ -11,7 +11,7 @@ function getApiUrl() {
     
     // Production environment - replace with your actual Render URL
     // You need to update this with your actual Render app URL
-    return 'https://your-render-app-name.onrender.com';
+    return 'https://fse-it.onrender.com/';
 }
 
 // Export the API base URL
