@@ -47,6 +47,8 @@
             submitBtn.textContent = 'Registering...';
             
             try {
+                console.log('Sending registration request to:', `${API_BASE}/register`);
+                
                 const response = await fetch(`${API_BASE}/register`, {
                     method: 'POST',
                     headers: {
@@ -55,7 +57,18 @@
                     body: JSON.stringify({ email, password })
                 });
                 
+                console.log('Response status:', response.status);
+                
+                // Check if response is JSON
+                const contentType = response.headers.get('content-type');
+                if (!contentType || !contentType.includes('application/json')) {
+                    const text = await response.text();
+                    console.error('Non-JSON response:', text);
+                    throw new Error(`Server returned non-JSON response (${response.status}). Server may be sleeping or down.`);
+                }
+                
                 const data = await response.json();
+                console.log('Response data:', data);
                 
                 if (response.ok) {
                     successDiv.textContent = 'Registration successful! Redirecting to login...';
@@ -68,9 +81,15 @@
                     errorDiv.style.display = 'block';
                 }
             } catch (error) {
-                errorDiv.textContent = 'Network error. Please try again.';
-                errorDiv.style.display = 'block';
                 console.error('Registration error:', error);
+                if (error.message.includes('Server may be sleeping')) {
+                    errorDiv.textContent = 'Server is starting up (sleep mode). Please wait 30 seconds and try again.';
+                } else if (error.message.includes('Failed to fetch')) {
+                    errorDiv.textContent = 'Cannot connect to server. Please check if the backend is running.';
+                } else {
+                    errorDiv.textContent = error.message || 'Network error. Please try again.';
+                }
+                errorDiv.style.display = 'block';
             } finally {
                 submitBtn.disabled = false;
                 submitBtn.textContent = 'Register';

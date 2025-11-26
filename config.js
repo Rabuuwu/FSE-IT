@@ -9,9 +9,8 @@ function getApiUrl() {
         return 'http://localhost:3000';
     }
     
-    // Production environment - replace with your actual Render URL
-    // You need to update this with your actual Render app URL
-    return 'https://fse-it.onrender.com/';
+    // Production environment - Render URL (no trailing slash)
+    return 'https://fse-it.onrender.com';
 }
 
 // Export the API base URL
