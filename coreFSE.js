@@ -74,7 +74,7 @@ async function ensureSchema() {
         
         // Check if users table exists and has correct structure
         const tableCheck = await pool.query(`
-            SELECT column_name 
+            SELECT column_name, data_type
             FROM information_schema.columns 
             WHERE table_name = 'users'
         `);
@@ -84,22 +84,45 @@ async function ensureSchema() {
             const columns = tableCheck.rows.map(row => row.column_name);
             console.log('Existing columns:', columns);
             
-            // Check if password_hash column exists
-            if (!columns.includes('password_hash')) {
-                console.log('⚠️  Missing password_hash column, recreating table...');
+            // Check if password_hash column exists or role is not integer
+            const roleColumn = tableCheck.rows.find(row => row.column_name === 'role');
+            if (!columns.includes('password_hash') || (roleColumn && roleColumn.data_type !== 'integer')) {
+                console.log('⚠️  Incorrect table structure, recreating tables...');
                 await pool.query('DROP TABLE IF EXISTS resources CASCADE');
                 await pool.query('DROP TABLE IF EXISTS users CASCADE');
+                await pool.query('DROP TABLE IF EXISTS roles CASCADE');
                 console.log('Old tables dropped');
             }
         }
         
-        // Create users table with all columns at once
+        // Create roles table first
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS roles (
+                id SERIAL PRIMARY KEY,
+                name TEXT UNIQUE NOT NULL,
+                description TEXT,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+            )
+        `);
+        console.log('✅ Roles table ready');
+        
+        // Insert default roles if they don't exist
+        await pool.query(`
+            INSERT INTO roles (id, name, description) 
+            VALUES 
+                (1, 'user', 'Regular user with basic access'),
+                (2, 'admin', 'Administrator with full access')
+            ON CONFLICT (name) DO NOTHING
+        `);
+        console.log('✅ Default roles inserted');
+        
+        // Create users table with role as foreign key
         await pool.query(`
             CREATE TABLE IF NOT EXISTS users (
                 id SERIAL PRIMARY KEY,
                 email TEXT UNIQUE NOT NULL,
                 password_hash TEXT NOT NULL,
-                role TEXT DEFAULT 'user',
+                role_id INTEGER DEFAULT 1 REFERENCES roles(id),
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
             )
         `);
@@ -169,7 +192,12 @@ app.post('/login', async (req, res) => {
             return res.status(400).json({ error: 'email and password are required' });
         }
 
-        const result = await pool.query('SELECT id, password_hash, role FROM users WHERE email = $1', [email]);
+        const result = await pool.query(`
+            SELECT u.id, u.password_hash, u.role_id, r.name as role_name 
+            FROM users u 
+            LEFT JOIN roles r ON u.role_id = r.id 
+            WHERE u.email = $1
+        `, [email]);
         if (!result.rows || result.rows.length === 0) {
             return res.status(401).json({ error: 'Invalid email or password' });
         }
@@ -180,7 +208,7 @@ app.post('/login', async (req, res) => {
             return res.status(401).json({ error: 'Invalid email or password' });
         }
 
-        const payload = { user_id: user.id, role: user.role || 'user' };
+        const payload = { user_id: user.id, role_id: user.role_id, role: user.role_name || 'user' };
         const secret = process.env.JWT_SECRET || 'dev_jwt_secret_change_me';
         if (!process.env.JWT_SECRET) {
             console.warn('JWT_SECRET is not set — using insecure default secret. Set JWT_SECRET in your .env for production.');
