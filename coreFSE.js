@@ -70,24 +70,55 @@ app.get('/', (req, res) => {
 // Ensure users table exists
 async function ensureSchema() {
     try {
-        await pool.query(`CREATE TABLE IF NOT EXISTS users (
-            id SERIAL PRIMARY KEY,
-            email TEXT UNIQUE NOT NULL,
-            password_hash TEXT NOT NULL,
-            created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
-        )`);
-        // ensure role column exists for JWT payloads
-        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'user'`);
-        // resources table for storing user-owned resources
-        await pool.query(`CREATE TABLE IF NOT EXISTS resources (
-            id SERIAL PRIMARY KEY,
-            owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-            data JSONB,
-            created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
-        )`);
-        console.log('Schema tables are ready');
+        console.log('Setting up database schema...');
+        
+        // Check if users table exists and has correct structure
+        const tableCheck = await pool.query(`
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name = 'users'
+        `);
+        
+        if (tableCheck.rows.length > 0) {
+            console.log('Users table exists, checking structure...');
+            const columns = tableCheck.rows.map(row => row.column_name);
+            console.log('Existing columns:', columns);
+            
+            // Check if password_hash column exists
+            if (!columns.includes('password_hash')) {
+                console.log('⚠️  Missing password_hash column, recreating table...');
+                await pool.query('DROP TABLE IF EXISTS resources CASCADE');
+                await pool.query('DROP TABLE IF EXISTS users CASCADE');
+                console.log('Old tables dropped');
+            }
+        }
+        
+        // Create users table with all columns at once
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY,
+                email TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                role TEXT DEFAULT 'user',
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+            )
+        `);
+        console.log('✅ Users table ready');
+        
+        // Create resources table
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS resources (
+                id SERIAL PRIMARY KEY,
+                owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                data JSONB,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+            )
+        `);
+        console.log('✅ Resources table ready');
+        
+        console.log('✅ Schema setup complete');
     } catch (err) {
-        console.error('Error ensuring schema:', err);
+        console.error('❌ Error ensuring schema:', err);
         throw err;
     }
 }
@@ -116,7 +147,16 @@ app.post('/register', async (req, res) => {
             return res.status(409).json({ error: 'Email already registered' });
         }
         console.error('Register error:', err);
-        return res.status(500).json({ error: 'Internal server error' });
+        console.error('Error details:', {
+            message: err.message,
+            code: err.code,
+            detail: err.detail,
+            stack: err.stack
+        });
+        return res.status(500).json({ 
+            error: 'Internal server error',
+            details: process.env.NODE_ENV === 'production' ? undefined : err.message 
+        });
     }
 });
 
@@ -197,12 +237,37 @@ app.post('/resources', authMiddleware, async (req, res) => {
 
 async function start() {
     try {
+        console.log('Starting FSE-IT API Server...');
+        console.log('DATABASE_URL configured:', !!process.env.DATABASE_URL);
+        console.log('PORT:', PORT);
+        
+        // Test database connection first
+        console.log('Testing database connection...');
+        const testResult = await pool.query('SELECT NOW() as current_time');
+        console.log('Database connected successfully at:', testResult.rows[0].current_time);
+        
+        // Create schema tables
         await ensureSchema();
-        // quick DB sanity check
-        await pool.query('SELECT 1');
-        app.listen(PORT, () => console.log(`Server listening on port ${PORT}`));
+        
+        // Start listening
+        app.listen(PORT, () => {
+            console.log(`✅ Server listening on port ${PORT}`);
+            console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+        });
     } catch (err) {
-        console.error('Failed to start application:', err);
+        console.error('❌ Failed to start application:', err);
+        console.error('Error details:', {
+            message: err.message,
+            code: err.code,
+            stack: err.stack
+        });
+        
+        // Check if it's a database connection error
+        if (err.message && err.message.includes('ENOTFOUND')) {
+            console.error('⚠️  DATABASE CONNECTION ERROR: Cannot connect to database');
+            console.error('   Please check DATABASE_URL environment variable');
+        }
+        
         process.exit(1);
     }
 }
