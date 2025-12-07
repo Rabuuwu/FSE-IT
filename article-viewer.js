@@ -1,5 +1,5 @@
 // Article Viewer JavaScript
-const API_BASE = window.location.origin;
+const API_BASE = window.API_CONFIG.BASE_URL;
 let currentUser = null;
 let allArticles = [];
 let allCourses = [];
