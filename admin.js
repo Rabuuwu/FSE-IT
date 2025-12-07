@@ -2,6 +2,8 @@
 const API_BASE = window.location.origin;
 let currentUser = null;
 let allUsers = [];
+let allArticles = [];
+let allCourses = [];
 let allResources = [];
 
 // Initialize on page load
@@ -66,10 +68,10 @@ function setupEventListeners() {
     document.getElementById('searchInput').addEventListener('input', performSearch);
 
     // Role filter
-    document.getElementById('roleFilter').addEventListener('change', loadUsers);
+    document.getElementById('roleFilter')?.addEventListener('change', loadUsers);
 
     // User filter for resources
-    document.getElementById('userFilter').addEventListener('change', loadResources);
+    document.getElementById('userFilter')?.addEventListener('change', loadResources);
 
     // Settings
     document.getElementById('resetDbBtn')?.addEventListener('click', resetDatabase);
@@ -109,6 +111,8 @@ function switchSection(sectionName) {
     const titles = {
         dashboard: 'Dashboard',
         users: 'Zarządzanie Użytkownikami',
+        articles: 'Zarządzanie Artykułami',
+        courses: 'Zarządzanie Kursami',
         resources: 'Zarządzanie Zasobami',
         settings: 'Ustawienia'
     };
@@ -116,6 +120,8 @@ function switchSection(sectionName) {
 
     // Load data for section
     if (sectionName === 'users') loadUsers();
+    if (sectionName === 'articles') loadArticles();
+    if (sectionName === 'courses') loadCourses();
     if (sectionName === 'resources') loadResources();
     if (sectionName === 'settings') loadSystemInfo();
 }
@@ -134,6 +140,22 @@ async function loadDashboardData() {
             allUsers = await usersResult.json();
             document.getElementById('userCount').textContent = allUsers.length;
             document.getElementById('adminCount').textContent = allUsers.filter(u => u.role === 'admin').length;
+        }
+
+        // Get articles count
+        const articlesResult = await fetch(`${API_BASE}/articles`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (articlesResult.ok) {
+            allArticles = await articlesResult.json();
+        }
+
+        // Get courses count
+        const coursesResult = await fetch(`${API_BASE}/courses`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (coursesResult.ok) {
+            allCourses = await coursesResult.json();
         }
 
         // Get resources count
@@ -475,11 +497,228 @@ function loadActivityLog() {
     });
 }
 
+// Load articles
+async function loadArticles() {
+    try {
+        const token = localStorage.getItem('token');
+        const response = await fetch(`${API_BASE}/articles`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (!response.ok) throw new Error('Failed to load articles');
+
+        allArticles = await response.json();
+
+        const tbody = document.getElementById('articlesTableBody');
+        tbody.innerHTML = '';
+
+        if (allArticles.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="no-data">Brak artykułów</td></tr>';
+            return;
+        }
+
+        allArticles.forEach(article => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${article.id}</td>
+                <td>${article.title}</td>
+                <td>${article.author_email}</td>
+                <td>${new Date(article.created_at).toLocaleDateString('pl-PL')}</td>
+                <td>
+                    <div class="btn-group">
+                        <button class="btn btn-sm btn-primary" onclick="viewArticleDetail(${article.id})">View</button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteArticle(${article.id})">Usuń</button>
+                    </div>
+                </td>
+            `;
+            tbody.appendChild(row);
+        });
+    } catch (err) {
+        console.error('Load articles error:', err);
+        showNotification('Błąd podczas ładowania artykułów', 'error');
+    }
+}
+
+// Load courses
+async function loadCourses() {
+    try {
+        const token = localStorage.getItem('token');
+        const response = await fetch(`${API_BASE}/courses`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (!response.ok) throw new Error('Failed to load courses');
+
+        allCourses = await response.json();
+
+        const tbody = document.getElementById('coursesTableBody');
+        tbody.innerHTML = '';
+
+        if (allCourses.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="no-data">Brak kursów</td></tr>';
+            return;
+        }
+
+        allCourses.forEach(course => {
+            const row = document.createElement('tr');
+            const stagesCount = course.stages ? course.stages.length : 0;
+            row.innerHTML = `
+                <td>${course.id}</td>
+                <td>${course.title}</td>
+                <td>${course.author_email}</td>
+                <td>${stagesCount}</td>
+                <td>${new Date(course.created_at).toLocaleDateString('pl-PL')}</td>
+                <td>
+                    <div class="btn-group">
+                        <button class="btn btn-sm btn-primary" onclick="viewCourseDetail(${course.id})">View</button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteCourse(${course.id})">Usuń</button>
+                    </div>
+                </td>
+            `;
+            tbody.appendChild(row);
+        });
+    } catch (err) {
+        console.error('Load courses error:', err);
+        showNotification('Błąd podczas ładowania kursów', 'error');
+    }
+}
+
+// Delete article
+async function deleteArticle(articleId) {
+    if (!confirm('Czy na pewno chcesz usunąć ten artykuł?')) {
+        return;
+    }
+
+    try {
+        const token = localStorage.getItem('token');
+        const response = await fetch(`${API_BASE}/articles/${articleId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (response.ok) {
+            showNotification('Artykuł został usunięty', 'success');
+            loadArticles();
+        } else {
+            showNotification('Błąd podczas usuwania artykułu', 'error');
+        }
+    } catch (err) {
+        console.error('Delete article error:', err);
+        showNotification('Błąd podczas usuwania artykułu', 'error');
+    }
+}
+
+// Delete course
+async function deleteCourse(courseId) {
+    if (!confirm('Czy na pewno chcesz usunąć ten kurs? Wszystkie etapy zostaną usunięte.')) {
+        return;
+    }
+
+    try {
+        const token = localStorage.getItem('token');
+        const response = await fetch(`${API_BASE}/courses/${courseId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (response.ok) {
+            showNotification('Kurs został usunięty', 'success');
+            loadCourses();
+        } else {
+            showNotification('Błąd podczas usuwania kursu', 'error');
+        }
+    } catch (err) {
+        console.error('Delete course error:', err);
+        showNotification('Błąd podczas usuwania kursu', 'error');
+    }
+}
+
+// View article detail
+function viewArticleDetail(articleId) {
+    const article = allArticles.find(a => a.id === articleId);
+    if (!article) return;
+
+    const modal = document.getElementById('userModal');
+    const body = document.getElementById('userModalBody');
+
+    body.innerHTML = `
+        <div class="modal-field">
+            <label>ID:</label>
+            <input type="text" value="${article.id}" readonly>
+        </div>
+        <div class="modal-field">
+            <label>Tytuł:</label>
+            <input type="text" value="${article.title}" readonly>
+        </div>
+        <div class="modal-field">
+            <label>Autor:</label>
+            <input type="text" value="${article.author_email}" readonly>
+        </div>
+        <div class="modal-field">
+            <label>Zawartość:</label>
+            <textarea readonly style="height: 200px;">${article.content}</textarea>
+        </div>
+        <div class="modal-field">
+            <label>Data Utworzenia:</label>
+            <input type="text" value="${new Date(article.created_at).toLocaleString('pl-PL')}" readonly>
+        </div>
+    `;
+
+    modal.classList.add('active');
+}
+
+// View course detail
+function viewCourseDetail(courseId) {
+    const course = allCourses.find(c => c.id === courseId);
+    if (!course) return;
+
+    const stagesHtml = (course.stages || []).map((stage, idx) => `
+        <div style="margin-bottom: 15px; padding: 10px; background: #f0f0f0; border-radius: 5px;">
+            <strong>Etap ${idx + 1}: ${stage.title}</strong>
+            <p style="margin-top: 5px; white-space: pre-wrap;">${stage.content.substring(0, 200)}...</p>
+        </div>
+    `).join('');
+
+    const modal = document.getElementById('userModal');
+    const body = document.getElementById('userModalBody');
+
+    body.innerHTML = `
+        <div class="modal-field">
+            <label>ID:</label>
+            <input type="text" value="${course.id}" readonly>
+        </div>
+        <div class="modal-field">
+            <label>Tytuł:</label>
+            <input type="text" value="${course.title}" readonly>
+        </div>
+        <div class="modal-field">
+            <label>Autor:</label>
+            <input type="text" value="${course.author_email}" readonly>
+        </div>
+        <div class="modal-field">
+            <label>Opis:</label>
+            <textarea readonly>${course.description || ''}</textarea>
+        </div>
+        <div class="modal-field">
+            <label>Etapy (${(course.stages || []).length}):</label>
+            <div>${stagesHtml}</div>
+        </div>
+        <div class="modal-field">
+            <label>Data Utworzenia:</label>
+            <input type="text" value="${new Date(course.created_at).toLocaleString('pl-PL')}" readonly>
+        </div>
+    `;
+
+    modal.classList.add('active');
+}
+
 // Export data
 async function exportData() {
     try {
         const data = {
             users: allUsers,
+            articles: allArticles,
+            courses: allCourses,
             resources: allResources,
             exportDate: new Date().toISOString(),
             exportBy: currentUser?.email
@@ -521,6 +760,8 @@ async function resetDatabase() {
         if (response.ok) {
             showNotification('Baza danych została zresetowana', 'success');
             allUsers = [];
+            allArticles = [];
+            allCourses = [];
             allResources = [];
             loadDashboardData();
             loadUsers();

@@ -19,20 +19,55 @@
     </div>
 
     <div class="container">
+        <!-- Navigation Menu -->
+        <nav class="main-nav">
+            <a href="dashboard.html" class="nav-item active">📊 Dashboard</a>
+            <a href="article-viewer.html" class="nav-item">📚 Materiały</a>
+            <a href="article-creator.html" class="nav-item">✏️ Utwórz</a>
+            <a href="admin.html" class="nav-item" id="adminLink" style="display:none;">👑 Admin</a>
+        </nav>
+
+        <!-- Quick Stats -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h3>Moje Artykuły</h3>
+                <p class="stat-value" id="myArticlesCount">0</p>
+                <a href="article-viewer.html" class="stat-link">Przejdź →</a>
+            </div>
+            <div class="stat-card">
+                <h3>Moje Kursy</h3>
+                <p class="stat-value" id="myCoursesCount">0</p>
+                <a href="article-viewer.html" class="stat-link">Przejdź →</a>
+            </div>
+            <div class="stat-card">
+                <h3>Moje Zasoby</h3>
+                <p class="stat-value" id="myResourcesCount">0</p>
+                <a href="#" class="stat-link">Przejdź →</a>
+            </div>
+            <div class="stat-card">
+                <h3>Wszystkie Materiały</h3>
+                <p class="stat-value" id="totalMaterialsCount">0</p>
+                <a href="article-viewer.html" class="stat-link">Przejdź →</a>
+            </div>
+        </div>
+
         <div class="section">
             <div class="resources-header">
-                <h2>My Resources</h2>
-                <button class="btn" onclick="toggleResourceForm()">Add New Resource</button>
+                <h2>Moje Zasoby</h2>
+                <div class="header-actions">
+                    <button class="btn" onclick="toggleResourceForm()">Dodaj Zasób</button>
+                    <a href="article-creator.html" class="btn" style="text-decoration: none; display: inline-block;">Utwórz Artykuł</a>
+                </div>
             </div>
             
             <div id="resourceForm" class="resource-form">
                 <form id="addResourceForm">
                     <div class="form-group">
-                        <label for="resourceData">Resource Data (JSON format):</label>
-                        <textarea id="resourceData" name="data" placeholder='{"title": "My Resource", "description": "Some description", "value": 123}'></textarea>
+                        <label for="resourceData">Dane Zasobu (format JSON):</label>
+                        <textarea id="resourceData" name="data" placeholder='{"title": "Mój Zasób", "description": "Opis", "value": 123}'></textarea>
                     </div>
-                    <button type="submit" class="btn" id="addBtn">Add Resource</button>
-                    <button type="button" class="btn" onclick="toggleResourceForm()" style="background: #95a5a6;">Cancel</button>
+                    <button type="submit" class="btn" id="addBtn">Dodaj Zasób</button>
+                    <button type="button" class="btn btn-secondary" onclick="toggleResourceForm()">Anuluj</button>
                 </form>
             </div>
             
@@ -40,18 +75,18 @@
             <div id="success" class="success"></div>
             
             <div id="resourcesList" class="resources-list">
-                <div class="loading">Loading resources...</div>
+                <div class="loading">Ładowanie zasobów...</div>
             </div>
         </div>
     </div>
 
     <script>
-        const API_BASE = window.API_CONFIG.BASE_URL;
+        const API_BASE = window.location.origin;
         let currentUser = null;
         
         // Check authentication on page load
         window.addEventListener('DOMContentLoaded', () => {
-            const token = localStorage.getItem('jwt_token');
+            const token = localStorage.getItem('token');
             if (!token) {
                 window.location.href = 'login.html';
                 return;
@@ -59,12 +94,13 @@
             
             loadUserInfo();
             loadResources();
+            loadStatistics();
         });
         
         // Load current user information
         async function loadUserInfo() {
             try {
-                const token = localStorage.getItem('jwt_token');
+                const token = localStorage.getItem('token');
                 const response = await fetch(`${API_BASE}/me`, {
                     headers: {
                         'Authorization': `Bearer ${token}`
@@ -74,7 +110,12 @@
                 if (response.ok) {
                     const data = await response.json();
                     currentUser = data.user;
-                    document.getElementById('userInfo').textContent = `User ID: ${currentUser.user_id} | Role: ${currentUser.role}`;
+                    document.getElementById('userInfo').textContent = `${currentUser.email} | Role: ${currentUser.role || 'user'}`;
+                    
+                    // Show admin link if user is admin
+                    if (currentUser.role === 'admin') {
+                        document.getElementById('adminLink').style.display = 'inline-block';
+                    }
                 } else {
                     throw new Error('Failed to load user info');
                 }
@@ -84,10 +125,59 @@
             }
         }
         
+        // Load statistics
+        async function loadStatistics() {
+            try {
+                const token = localStorage.getItem('token');
+                
+                // Load user's articles
+                const articlesRes = await fetch(`${API_BASE}/articles`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                let userArticles = 0;
+                let totalArticles = 0;
+                if (articlesRes.ok) {
+                    const articles = await articlesRes.json();
+                    totalArticles = articles.length;
+                    userArticles = articles.filter(a => a.author_id === currentUser.user_id).length;
+                }
+                
+                // Load user's courses
+                const coursesRes = await fetch(`${API_BASE}/courses`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                let userCourses = 0;
+                let totalCourses = 0;
+                if (coursesRes.ok) {
+                    const courses = await coursesRes.json();
+                    totalCourses = courses.length;
+                    userCourses = courses.filter(c => c.author_id === currentUser.user_id).length;
+                }
+                
+                // Load resources
+                const resourcesRes = await fetch(`${API_BASE}/resources`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                let userResources = 0;
+                if (resourcesRes.ok) {
+                    const data = await resourcesRes.json();
+                    userResources = data.resources ? data.resources.length : 0;
+                }
+                
+                // Update UI
+                document.getElementById('myArticlesCount').textContent = userArticles;
+                document.getElementById('myCoursesCount').textContent = userCourses;
+                document.getElementById('myResourcesCount').textContent = userResources;
+                document.getElementById('totalMaterialsCount').textContent = totalArticles + totalCourses;
+            } catch (error) {
+                console.error('Error loading statistics:', error);
+            }
+        }
+        
         // Load user resources
         async function loadResources() {
             try {
-                const token = localStorage.getItem('jwt_token');
+                const token = localStorage.getItem('token');
                 const response = await fetch(`${API_BASE}/resources`, {
                     headers: {
                         'Authorization': `Bearer ${token}`
@@ -98,14 +188,13 @@
                     const data = await response.json();
                     displayResources(data.resources);
                 } else if (response.status === 401) {
-                    // Token expired or invalid
                     logout();
                 } else {
                     throw new Error('Failed to load resources');
                 }
             } catch (error) {
                 console.error('Error loading resources:', error);
-                showError('Failed to load resources. Please try refreshing the page.');
+                showError('Błąd podczas ładowania zasobów. Spróbuj odświeżyć stronę.');
             }
         }
         
@@ -114,7 +203,7 @@
             const resourcesList = document.getElementById('resourcesList');
             
             if (resources.length === 0) {
-                resourcesList.innerHTML = '<div class="empty-state">No resources found. Add your first resource!</div>';
+                resourcesList.innerHTML = '<div class="empty-state">Brak zasobów. Dodaj swój pierwszy zasób!</div>';
                 return;
             }
             
@@ -122,7 +211,7 @@
                 <div class="resource-item">
                     <div class="resource-meta">
                         <span>ID: ${resource.id}</span>
-                        <span>Created: ${new Date(resource.created_at).toLocaleString()}</span>
+                        <span>Utworzony: ${new Date(resource.created_at).toLocaleString('pl-PL')}</span>
                     </div>
                     <div class="resource-data">${JSON.stringify(resource.data, null, 2)}</div>
                 </div>
@@ -152,21 +241,19 @@
             
             let resourceData;
             try {
-                // Parse JSON data
                 const jsonString = resourceDataInput.value.trim();
                 resourceData = jsonString ? JSON.parse(jsonString) : null;
             } catch (error) {
-                showError('Invalid JSON format. Please check your data.');
+                showError('Nieprawidłowy format JSON. Sprawdź swoje dane.');
                 return;
             }
             
-            // Disable button during request
             addBtn.disabled = true;
-            addBtn.textContent = 'Adding...';
+            addBtn.textContent = 'Dodawanie...';
             clearMessages();
             
             try {
-                const token = localStorage.getItem('jwt_token');
+                const token = localStorage.getItem('token');
                 const response = await fetch(`${API_BASE}/resources`, {
                     method: 'POST',
                     headers: {
@@ -177,23 +264,23 @@
                 });
                 
                 if (response.ok) {
-                    const data = await response.json();
-                    showSuccess('Resource added successfully!');
+                    showSuccess('Zasób został dodany pomyślnie!');
                     resourceDataInput.value = '';
                     toggleResourceForm();
-                    loadResources(); // Refresh the list
+                    loadResources();
+                    loadStatistics();
                 } else if (response.status === 401) {
                     logout();
                 } else {
                     const errorData = await response.json();
-                    showError(errorData.error || 'Failed to add resource');
+                    showError(errorData.error || 'Błąd podczas dodawania zasobu');
                 }
             } catch (error) {
                 console.error('Error adding resource:', error);
-                showError('Network error. Please try again.');
+                showError('Błąd sieci. Spróbuj ponownie.');
             } finally {
                 addBtn.disabled = false;
-                addBtn.textContent = 'Add Resource';
+                addBtn.textContent = 'Dodaj Zasób';
             }
         });
         
@@ -222,7 +309,7 @@
         }
         
         function logout() {
-            localStorage.removeItem('jwt_token');
+            localStorage.removeItem('token');
             window.location.href = 'login.html';
         }
     </script>
