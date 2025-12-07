@@ -1,3 +1,13 @@
+:root {
+    --primary: #2c3e50;
+    --secondary: #3498db;
+    --success: #27ae60;
+    --danger: #e74c3c;
+    --light: #ecf0f1;
+    --border: #bdc3c7;
+    --text-dark: #34495e;
+}
+
 * {
     margin: 0;
     padding: 0;
@@ -5,8 +15,8 @@
 }
 
 body {
-    font-family: Arial, sans-serif;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: #f5f7fa;
     min-height: 100vh;
     display: flex;
     align-items: center;
@@ -15,17 +25,18 @@ body {
 
 .container {
     background: white;
-    padding: 2rem;
-    border-radius: 10px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    padding: 2.5rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
     max-width: 400px;
     width: 90%;
 }
 
 h1 {
-    color: #333;
-    margin-bottom: 1rem;
+    color: var(--primary);
+    margin-bottom: 1.5rem;
     text-align: center;
+    font-size: 1.8rem;
 }
 
 .form-group {
@@ -35,36 +46,40 @@ h1 {
 label {
     display: block;
     margin-bottom: 0.5rem;
-    color: #333;
+    color: var(--text-dark);
+    font-weight: 600;
 }
 
 input {
     width: 100%;
     padding: 12px;
-    border: 1px solid #ddd;
+    border: 1px solid var(--border);
     border-radius: 5px;
     font-size: 16px;
+    transition: border-color 0.3s, box-shadow 0.3s;
 }
 
 input:focus {
     outline: none;
-    border-color: #667eea;
+    border-color: var(--secondary);
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
 }
 
 .btn {
     width: 100%;
     padding: 12px;
-    background: #667eea;
+    background: var(--secondary);
     color: white;
     border: none;
     border-radius: 5px;
     font-size: 16px;
+    font-weight: 600;
     cursor: pointer;
     transition: background 0.3s;
 }
 
 .btn:hover {
-    background: #5a6fd8;
+    background: #2980b9;
 }
 
 .btn:disabled {
@@ -73,26 +88,27 @@ input:focus {
 }
 
 .error {
-    color: #e74c3c;
+    color: var(--danger);
     margin-top: 0.5rem;
     display: none;
 }
 
 .success {
-    color: #27ae60;
+    color: var(--success);
     margin-top: 0.5rem;
     display: none;
 }
 
 .links {
     text-align: center;
-    margin-top: 1rem;
+    margin-top: 1.5rem;
 }
 
 .links a {
-    color: #667eea;
+    color: var(--secondary);
     text-decoration: none;
     margin: 0 0.5rem;
+    font-weight: 600;
 }
 
 .links a:hover {
