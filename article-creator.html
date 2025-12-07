@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kreator Artykułów i Kursów - FSE-IT</title>
+    <link rel="stylesheet" href="css/article-creator.css">
+    <!-- SimpleMDE Editor -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/simplemde/latest/simplemde.min.css">
+</head>
+<body>
+    <div class="creator-container">
+        <!-- Sidebar Navigation -->
+        <aside class="creator-sidebar">
+            <div class="creator-header">
+                <h2>FSE-IT</h2>
+                <p id="userEmail" class="user-info">Ładowanie...</p>
+            </div>
+            
+            <nav class="creator-nav">
+                <a href="#" class="nav-link active" data-mode="article">
+                    <span class="icon">📝</span> Artykuł
+                </a>
+                <a href="#" class="nav-link" data-mode="course">
+                    <span class="icon">📚</span> Kurs
+                </a>
+                <a href="dashboard.html" class="nav-link">
+                    <span class="icon">📊</span> Dashboard
+                </a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <button id="logoutBtn" class="btn-logout">Wyloguj</button>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="creator-main">
+            <!-- Article Creator Mode -->
+            <section id="articleMode" class="creator-mode active">
+                <div class="mode-header">
+                    <h1>Utwórz Artykuł Edukacyjny</h1>
+                    <div class="mode-actions">
+                        <button id="previewArticleBtn" class="btn btn-secondary">👁️ Podgląd</button>
+                        <button id="saveArticleBtn" class="btn btn-primary">💾 Opublikuj</button>
+                    </div>
+                </div>
+
+                <div class="article-form">
+                    <div class="form-group">
+                        <label for="articleTitle">Tytuł Artykułu</label>
+                        <input 
+                            type="text" 
+                            id="articleTitle" 
+                            class="form-control form-control-lg"
+                            placeholder="Wpisz tytuł artykułu..."
+                        >
+                    </div>
+
+                    <div class="form-group">
+                        <label for="articleSummary">Streszczenie (opcjonalnie)</label>
+                        <textarea 
+                            id="articleSummary" 
+                            class="form-control"
+                            placeholder="Krótkie streszczenie artykułu..."
+                            rows="2"
+                        ></textarea>
+                    </div>
+
+                    <div class="editor-toolbar">
+                        <span class="toolbar-label">Treść Artykułu</span>
+                        <div class="toolbar-actions">
+                            <button id="importFileBtn" class="btn btn-sm btn-secondary" type="button">
+                                📥 Importuj z pliku
+                            </button>
+                            <button id="exportArticleBtn" class="btn btn-sm btn-secondary" type="button">
+                                📤 Eksportuj
+                            </button>
+                        </div>
+                    </div>
+
+                    <textarea id="articleEditor" class="editor"></textarea>
+
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="publishArticle" checked>
+                            Opublikuj artykuł
+                        </label>
+                    </div>
+                </div>
+
+                <input type="file" id="fileInput" accept=".txt,.md,.html" style="display:none">
+            </section>
+
+            <!-- Course Creator Mode -->
+            <section id="courseMode" class="creator-mode">
+                <div class="mode-header">
+                    <h1>Utwórz Kurs</h1>
+                    <div class="mode-actions">
+                        <button id="previewCourseBtn" class="btn btn-secondary">👁️ Podgląd</button>
+                        <button id="saveCourseBtn" class="btn btn-primary">💾 Opublikuj Kurs</button>
+                    </div>
+                </div>
+
+                <div class="course-form">
+                    <div class="form-group">
+                        <label for="courseTitle">Tytuł Kursu</label>
+                        <input 
+                            type="text" 
+                            id="courseTitle" 
+                            class="form-control form-control-lg"
+                            placeholder="Wpisz tytuł kursu..."
+                        >
+                    </div>
+
+                    <div class="form-group">
+                        <label for="courseDescription">Opis Kursu</label>
+                        <textarea 
+                            id="courseDescription" 
+                            class="form-control"
+                            placeholder="Opisz cel i zawartość kursu..."
+                            rows="3"
+                        ></textarea>
+                    </div>
+
+                    <div class="stages-section">
+                        <div class="stages-header">
+                            <h2>Etapy Kursu</h2>
+                            <button id="addStageBtn" class="btn btn-sm btn-success" type="button">
+                                ➕ Dodaj Etap
+                            </button>
+                        </div>
+
+                        <div id="stagesContainer" class="stages-container">
+                            <!-- Stages will be added here -->
+                        </div>
+
+                        <div id="noStagesMsg" class="no-stages-msg">
+                            Brak etapów. Kliknij "Dodaj Etap" aby rozpocząć.
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Article Preview Modal -->
+    <div id="articlePreviewModal" class="modal">
+        <div class="modal-content modal-lg">
+            <span class="close">&times;</span>
+            <div id="articlePreviewContent" class="preview-content">
+                <!-- Article preview will be rendered here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Course Preview Modal -->
+    <div id="coursePreviewModal" class="modal">
+        <div class="modal-content modal-lg">
+            <span class="close">&times;</span>
+            <div id="coursePreviewContent" class="preview-content">
+                <!-- Course preview will be rendered here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Stage Edit Modal -->
+    <div id="stageEditModal" class="modal">
+        <div class="modal-content modal-xl">
+            <span class="close">&times;</span>
+            <h2>Edytuj Etap</h2>
+            <div class="stage-edit-form">
+                <div class="form-group">
+                    <label for="stageTitle">Tytuł Etapu</label>
+                    <input 
+                        type="text" 
+                        id="stageTitle" 
+                        class="form-control"
+                        placeholder="Tytuł etapu..."
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label>Zawartość Etapu</label>
+                    <textarea id="stageEditor" class="editor"></textarea>
+                </div>
+
+                <div class="modal-footer">
+                    <button id="closeStageEditBtn" class="btn btn-secondary">Anuluj</button>
+                    <button id="saveStageBtn" class="btn btn-primary">Zapisz Etap</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="notification" class="notification"></div>
+
+    <script src="https://cdn.jsdelivr.net/simplemde/latest/simplemde.min.js"></script>
+    <script src="article-creator.js"></script>
+</body>
+</html>

@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Artykuły i Kursy - FSE-IT</title>
+    <link rel="stylesheet" href="css/article-viewer.css">
+</head>
+<body>
+    <div class="viewer-container">
+        <!-- Navigation Bar -->
+        <nav class="top-nav">
+            <div class="nav-content">
+                <a href="dashboard.html" class="logo">📚 FSE-IT</a>
+                
+                <div class="nav-search">
+                    <input 
+                        type="text" 
+                        id="searchInput" 
+                        class="search-box"
+                        placeholder="Szukaj artykułów lub kursów..."
+                    >
+                </div>
+
+                <div class="nav-menu">
+                    <div class="nav-user">
+                        <span id="userEmail">Ładowanie...</span>
+                        <button id="logoutBtn" class="btn-logout">Wyloguj</button>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Sidebar -->
+        <aside class="viewer-sidebar">
+            <div class="sidebar-section">
+                <h3>Filtry</h3>
+                <div class="filter-group">
+                    <label class="checkbox-label">
+                        <input type="radio" name="type" value="all" checked>
+                        Wszystkie ({{allCount}})
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="radio" name="type" value="article">
+                        Artykuły ({{articleCount}})
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="radio" name="type" value="course">
+                        Kursy ({{courseCount}})
+                    </label>
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <h3>Sortowanie</h3>
+                <select id="sortSelect" class="select-control">
+                    <option value="newest">Najnowsze</option>
+                    <option value="oldest">Najstarsze</option>
+                    <option value="title-az">Tytuł (A-Z)</option>
+                    <option value="title-za">Tytuł (Z-A)</option>
+                </select>
+            </div>
+
+            <div class="sidebar-section">
+                <h3>Akcje</h3>
+                <a href="article-creator.html" class="btn btn-primary btn-block">
+                    ✏️ Utwórz Artykuł
+                </a>
+                <a href="article-creator.html" class="btn btn-secondary btn-block">
+                    📚 Utwórz Kurs
+                </a>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="viewer-main">
+            <div class="content-header">
+                <h1>Materiały Edukacyjne</h1>
+                <p id="contentCount" class="count-info">Ładowanie...</p>
+            </div>
+
+            <!-- Articles/Courses List -->
+            <div id="contentList" class="content-grid">
+                <div class="loading-spinner">
+                    <p>Ładowanie materiałów...</p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Article Viewer Modal -->
+    <div id="articleViewerModal" class="modal">
+        <div class="modal-overlay"></div>
+        <div class="modal-content modal-lg">
+            <button class="close">&times;</button>
+            <div id="articleViewerContent" class="viewer-content">
+                <!-- Article content will be rendered here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Course Viewer Modal -->
+    <div id="courseViewerModal" class="modal">
+        <div class="modal-overlay"></div>
+        <div class="modal-content modal-xl">
+            <button class="close">&times;</button>
+            <div id="courseViewerContent" class="viewer-content">
+                <!-- Course content will be rendered here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification -->
+    <div id="notification" class="notification"></div>
+
+    <script src="article-viewer.js"></script>
+</body>
+</html>

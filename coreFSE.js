@@ -87,11 +87,8 @@ async function ensureSchema() {
             // Check if password_hash column exists or role is not integer
             const roleColumn = tableCheck.rows.find(row => row.column_name === 'role');
             if (!columns.includes('password_hash') || (roleColumn && roleColumn.data_type !== 'integer')) {
-                console.log('⚠️  Incorrect table structure, recreating tables...');
-                await pool.query('DROP TABLE IF EXISTS resources CASCADE');
-                await pool.query('DROP TABLE IF EXISTS users CASCADE');
-                await pool.query('DROP TABLE IF EXISTS roles CASCADE');
-                console.log('Old tables dropped');
+                console.warn('⚠️  Incorrect users table structure detected; not dropping tables automatically.');
+                console.warn('Please run a proper migration or adjust schema manually to avoid data loss.');
             }
         }
         
@@ -128,7 +125,50 @@ async function ensureSchema() {
         `);
         console.log('✅ Users table ready');
         
-        // Create resources table
+        // Create articles table
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS articles (
+                id SERIAL PRIMARY KEY,
+                author_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                title TEXT NOT NULL,
+                content TEXT NOT NULL,
+                summary TEXT,
+                type VARCHAR(20) DEFAULT 'article',
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+            )
+        `);
+        console.log('✅ Articles table ready');
+
+        // Create courses table
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS courses (
+                id SERIAL PRIMARY KEY,
+                author_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                title TEXT NOT NULL,
+                description TEXT,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+            )
+        `);
+        console.log('✅ Courses table ready');
+
+        // Create course stages table
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS course_stages (
+                id SERIAL PRIMARY KEY,
+                course_id INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+                stage_number INTEGER NOT NULL,
+                title TEXT NOT NULL,
+                content TEXT NOT NULL,
+                order_index INTEGER NOT NULL,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+                UNIQUE(course_id, stage_number)
+            )
+        `);
+        console.log('✅ Course stages table ready');
+
+        // Legacy resources table for backwards compatibility
         await pool.query(`
             CREATE TABLE IF NOT EXISTS resources (
                 id SERIAL PRIMARY KEY,
@@ -259,6 +299,366 @@ app.post('/resources', authMiddleware, async (req, res) => {
         return res.status(201).json({ resource: inserted.rows[0] });
     } catch (err) {
         console.error('POST /resources error:', err);
+        return res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// DELETE /resources/:id - delete resource (only owner or admin)
+app.delete('/resources/:id', authMiddleware, async (req, res) => {
+    try {
+        const userId = req.user && req.user.user_id;
+        const resourceId = req.params.id;
+
+        // Get resource to check ownership
+        const resourceCheck = await pool.query(
+            'SELECT owner_id FROM resources WHERE id = $1',
+            [resourceId]
+        );
+
+        if (resourceCheck.rows.length === 0) {
+            return res.status(404).json({ error: 'Resource not found' });
+        }
+
+        const resource = resourceCheck.rows[0];
+
+        // Check if user is owner or admin
+        if (resource.owner_id !== userId && req.user.role !== 'admin') {
+            return res.status(403).json({ error: 'Forbidden' });
+        }
+
+        await pool.query('DELETE FROM resources WHERE id = $1', [resourceId]);
+        return res.json({ message: 'Resource deleted' });
+    } catch (err) {
+        console.error('DELETE /resources/:id error:', err);
+        return res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// ADMIN ROUTES
+// GET /users - get all users (admin only)
+app.get('/users', authMiddleware, async (req, res) => {
+    try {
+        if (req.user.role !== 'admin') {
+            return res.status(403).json({ error: 'Forbidden - Admin only' });
+        }
+
+        const result = await pool.query(`
+            SELECT u.id, u.email, u.created_at, r.name as role
+            FROM users u
+            LEFT JOIN roles r ON u.role_id = r.id
+            ORDER BY u.created_at DESC
+        `);
+
+        return res.json(result.rows);
+    } catch (err) {
+        console.error('GET /users error:', err);
+        return res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// DELETE /users/:id - delete user (admin only)
+app.delete('/users/:id', authMiddleware, async (req, res) => {
+    try {
+        if (req.user.role !== 'admin') {
+            return res.status(403).json({ error: 'Forbidden - Admin only' });
+        }
+
+        const userId = req.params.id;
+
+        // Prevent deleting self
+        if (userId === req.user.user_id.toString()) {
+            return res.status(400).json({ error: 'Cannot delete your own account' });
+        }
+
+        // Delete user's resources first (CASCADE should handle this, but explicit for safety)
+        await pool.query('DELETE FROM resources WHERE owner_id = $1', [userId]);
+
+        // Delete user
+        const result = await pool.query('DELETE FROM users WHERE id = $1 RETURNING id', [userId]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        return res.json({ message: 'User deleted' });
+    } catch (err) {
+        console.error('DELETE /users/:id error:', err);
+        return res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// GET /admin/resources - get all resources (admin only)
+app.get('/admin/resources', authMiddleware, async (req, res) => {
+    try {
+        if (req.user.role !== 'admin') {
+            return res.status(403).json({ error: 'Forbidden - Admin only' });
+        }
+
+        const result = await pool.query(
+            'SELECT id, owner_id, data, created_at FROM resources ORDER BY created_at DESC'
+        );
+
+        return res.json(result.rows);
+    } catch (err) {
+        console.error('GET /admin/resources error:', err);
+        return res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// POST /admin/reset - reset database (admin only) - DANGEROUS
+app.post('/admin/reset', authMiddleware, async (req, res) => {
+    try {
+        if (req.user.role !== 'admin') {
+            return res.status(403).json({ error: 'Forbidden - Admin only' });
+        }
+
+        console.warn('⚠️  ADMIN ACTION: Database reset initiated by', req.user.email);
+
+        // Delete all data while preserving schema
+        await pool.query('DELETE FROM resources');
+        await pool.query('DELETE FROM users');
+        await pool.query('DELETE FROM roles');
+
+        // Reinitialize default roles
+        await pool.query(`
+            INSERT INTO roles (id, name, description) 
+            VALUES 
+                (1, 'user', 'Regular user with basic access'),
+                (2, 'admin', 'Administrator with full access')
+            ON CONFLICT (name) DO NOTHING
+        `);
+
+        console.log('✅ Database reset completed');
+        return res.json({ message: 'Database reset completed' });
+    } catch (err) {
+        console.error('POST /admin/reset error:', err);
+        return res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// ARTICLE ROUTES
+// GET /articles - get all articles
+app.get('/articles', authMiddleware, async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT a.id, a.author_id, a.title, a.content, a.summary, a.created_at, u.email as author_email
+            FROM articles a
+            JOIN users u ON a.author_id = u.id
+            ORDER BY a.created_at DESC
+        `);
+
+        return res.json(result.rows);
+    } catch (err) {
+        console.error('GET /articles error:', err);
+        return res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// GET /articles/:id - get article by ID
+app.get('/articles/:id', authMiddleware, async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT a.id, a.author_id, a.title, a.content, a.summary, a.created_at, u.email as author_email
+            FROM articles a
+            JOIN users u ON a.author_id = u.id
+            WHERE a.id = $1
+        `, [req.params.id]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Article not found' });
+        }
+
+        return res.json(result.rows[0]);
+    } catch (err) {
+        console.error('GET /articles/:id error:', err);
+        return res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// POST /articles - create article
+// Body: { title, content, summary, published }
+app.post('/articles', authMiddleware, async (req, res) => {
+    try {
+        const { title, content, summary, published } = req.body;
+        const userId = req.user.user_id;
+
+        if (!title || !content) {
+            return res.status(400).json({ error: 'title and content are required' });
+        }
+
+        const result = await pool.query(
+            `INSERT INTO articles (author_id, title, content, summary, type)
+             VALUES ($1, $2, $3, $4, 'article')
+             RETURNING id, author_id, title, created_at`,
+            [userId, title, content, summary || null]
+        );
+
+        return res.status(201).json(result.rows[0]);
+    } catch (err) {
+        console.error('POST /articles error:', err);
+        return res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// DELETE /articles/:id - delete article
+app.delete('/articles/:id', authMiddleware, async (req, res) => {
+    try {
+        const articleId = req.params.id;
+        const userId = req.user.user_id;
+
+        // Check ownership or admin
+        const checkRes = await pool.query(
+            'SELECT author_id FROM articles WHERE id = $1',
+            [articleId]
+        );
+
+        if (checkRes.rows.length === 0) {
+            return res.status(404).json({ error: 'Article not found' });
+        }
+
+        if (checkRes.rows[0].author_id !== userId && req.user.role !== 'admin') {
+            return res.status(403).json({ error: 'Forbidden' });
+        }
+
+        await pool.query('DELETE FROM articles WHERE id = $1', [articleId]);
+        return res.json({ message: 'Article deleted' });
+    } catch (err) {
+        console.error('DELETE /articles/:id error:', err);
+        return res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// COURSE ROUTES
+// GET /courses - get all courses
+app.get('/courses', authMiddleware, async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT c.id, c.author_id, c.title, c.description, c.created_at, u.email as author_email
+            FROM courses c
+            JOIN users u ON c.author_id = u.id
+            ORDER BY c.created_at DESC
+        `);
+
+        // Get stages for each course
+        const courses = await Promise.all(result.rows.map(async (course) => {
+            const stagesRes = await pool.query(
+                `SELECT id, title, content, stage_number FROM course_stages
+                 WHERE course_id = $1 ORDER BY stage_number ASC`,
+                [course.id]
+            );
+            return {
+                ...course,
+                stages: stagesRes.rows
+            };
+        }));
+
+        return res.json(courses);
+    } catch (err) {
+        console.error('GET /courses error:', err);
+        return res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// GET /courses/:id - get course by ID with stages
+app.get('/courses/:id', authMiddleware, async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT c.id, c.author_id, c.title, c.description, c.created_at, u.email as author_email
+            FROM courses c
+            JOIN users u ON c.author_id = u.id
+            WHERE c.id = $1
+        `, [req.params.id]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Course not found' });
+        }
+
+        const course = result.rows[0];
+
+        // Get stages
+        const stagesRes = await pool.query(
+            `SELECT id, title, content, stage_number FROM course_stages
+             WHERE course_id = $1 ORDER BY stage_number ASC`,
+            [course.id]
+        );
+
+        return res.json({
+            ...course,
+            stages: stagesRes.rows
+        });
+    } catch (err) {
+        console.error('GET /courses/:id error:', err);
+        return res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// POST /courses - create course with stages
+// Body: { title, description, stages: [{ title, content }, ...] }
+app.post('/courses', authMiddleware, async (req, res) => {
+    try {
+        const { title, description, stages } = req.body;
+        const userId = req.user.user_id;
+
+        if (!title || !stages || stages.length === 0) {
+            return res.status(400).json({ error: 'title and at least one stage are required' });
+        }
+
+        const courseRes = await pool.query(
+            `INSERT INTO courses (author_id, title, description)
+             VALUES ($1, $2, $3)
+             RETURNING id, author_id, title, created_at`,
+            [userId, title, description || null]
+        );
+
+        const courseId = courseRes.rows[0].id;
+
+        // Insert stages
+        for (let i = 0; i < stages.length; i++) {
+            const stage = stages[i];
+            await pool.query(
+                `INSERT INTO course_stages (course_id, stage_number, title, content, order_index)
+                 VALUES ($1, $2, $3, $4, $5)`,
+                [courseId, i + 1, stage.title || `Stage ${i + 1}`, stage.content || '', i]
+            );
+        }
+
+        return res.status(201).json({
+            ...courseRes.rows[0],
+            stages: stages
+        });
+    } catch (err) {
+        console.error('POST /courses error:', err);
+        return res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// DELETE /courses/:id - delete course
+app.delete('/courses/:id', authMiddleware, async (req, res) => {
+    try {
+        const courseId = req.params.id;
+        const userId = req.user.user_id;
+
+        // Check ownership or admin
+        const checkRes = await pool.query(
+            'SELECT author_id FROM courses WHERE id = $1',
+            [courseId]
+        );
+
+        if (checkRes.rows.length === 0) {
+            return res.status(404).json({ error: 'Course not found' });
+        }
+
+        if (checkRes.rows[0].author_id !== userId && req.user.role !== 'admin') {
+            return res.status(403).json({ error: 'Forbidden' });
+        }
+
+        // Delete stages first (cascade should handle, but explicit for safety)
+        await pool.query('DELETE FROM course_stages WHERE course_id = $1', [courseId]);
+        await pool.query('DELETE FROM courses WHERE id = $1', [courseId]);
+
+        return res.json({ message: 'Course deleted' });
+    } catch (err) {
+        console.error('DELETE /courses/:id error:', err);
         return res.status(500).json({ error: 'Internal server error' });
     }
 });

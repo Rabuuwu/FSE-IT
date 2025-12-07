@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel Administratora - FSE-IT</title>
+    <link rel="stylesheet" href="css/admin.css">
+</head>
+<body>
+    <div class="admin-container">
+        <!-- Sidebar Navigation -->
+        <aside class="admin-sidebar">
+            <div class="admin-header">
+                <h2>FSE-IT Admin</h2>
+                <p id="adminUser" class="admin-user">Ładowanie...</p>
+            </div>
+            
+            <nav class="admin-nav">
+                <a href="#" class="nav-link active" data-section="dashboard">
+                    <span class="icon">📊</span> Dashboard
+                </a>
+                <a href="#" class="nav-link" data-section="users">
+                    <span class="icon">👥</span> Użytkownicy
+                </a>
+                <a href="#" class="nav-link" data-section="resources">
+                    <span class="icon">📦</span> Zasoby
+                </a>
+                <a href="#" class="nav-link" data-section="settings">
+                    <span class="icon">⚙️</span> Ustawienia
+                </a>
+            </nav>
+            
+            <div class="admin-footer">
+                <button id="logoutBtn" class="btn-logout">Wyloguj</button>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="admin-main">
+            <div class="admin-top-bar">
+                <h1 id="sectionTitle">Dashboard</h1>
+                <div class="search-bar">
+                    <input 
+                        type="text" 
+                        id="searchInput" 
+                        class="search-input" 
+                        placeholder="Szukaj użytkownika lub zasobu..."
+                    >
+                </div>
+            </div>
+
+            <!-- Dashboard Section -->
+            <section id="dashboard" class="section active">
+                <div class="dashboard-grid">
+                    <div class="stat-card">
+                        <h3>Użytkownicy</h3>
+                        <p class="stat-number" id="userCount">0</p>
+                        <p class="stat-label">Ogółem zarejestrowanych</p>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <h3>Zasoby</h3>
+                        <p class="stat-number" id="resourceCount">0</p>
+                        <p class="stat-label">Ogółem zasobów</p>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <h3>Administratorzy</h3>
+                        <p class="stat-number" id="adminCount">0</p>
+                        <p class="stat-label">Kont administratorów</p>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <h3>Status</h3>
+                        <p class="stat-status" id="dbStatus">🔄 Sprawdzanie...</p>
+                        <p class="stat-label">Baza danych</p>
+                    </div>
+                </div>
+
+                <div class="recent-activity">
+                    <h2>Niedawna Aktywność</h2>
+                    <div id="activityLog" class="activity-list">
+                        <p class="no-data">Brak danych</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Users Section -->
+            <section id="users" class="section">
+                <div class="section-header">
+                    <h2>Zarządzanie Użytkownikami</h2>
+                    <div class="section-controls">
+                        <select id="roleFilter" class="filter-select">
+                            <option value="">Wszystkie role</option>
+                            <option value="user">Użytkownik</option>
+                            <option value="admin">Administrator</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Email</th>
+                                <th>Rola</th>
+                                <th>Zasoby</th>
+                                <th>Data Rejestracji</th>
+                                <th>Akcje</th>
+                            </tr>
+                        </thead>
+                        <tbody id="usersTableBody">
+                            <tr>
+                                <td colspan="6" class="no-data">Ładowanie użytkowników...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Resources Section -->
+            <section id="resources" class="section">
+                <div class="section-header">
+                    <h2>Zarządzanie Zasobami</h2>
+                    <div class="section-controls">
+                        <select id="userFilter" class="filter-select">
+                            <option value="">Wszyscy użytkownicy</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Właściciel</th>
+                                <th>Email Właściciela</th>
+                                <th>Dane</th>
+                                <th>Data Utworzenia</th>
+                                <th>Akcje</th>
+                            </tr>
+                        </thead>
+                        <tbody id="resourcesTableBody">
+                            <tr>
+                                <td colspan="6" class="no-data">Ładowanie zasobów...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Settings Section -->
+            <section id="settings" class="section">
+                <div class="section-header">
+                    <h2>Ustawienia Administratora</h2>
+                </div>
+
+                <div class="settings-grid">
+                    <div class="settings-card">
+                        <h3>Zarządzanie Bazą Danych</h3>
+                        <p>Operacje na bazie danych (wymaga ostrożności)</p>
+                        <button id="resetDbBtn" class="btn btn-danger">Resetuj Bazę Danych</button>
+                        <p class="warning-text">⚠️ Ta operacja usunie wszystkie dane!</p>
+                    </div>
+
+                    <div class="settings-card">
+                        <h3>Eksport Danych</h3>
+                        <p>Pobierz dane użytkowników i zasobów</p>
+                        <button id="exportDataBtn" class="btn btn-primary">Eksportuj JSON</button>
+                    </div>
+
+                    <div class="settings-card">
+                        <h3>Informacje Systemu</h3>
+                        <div id="systemInfo" class="info-display">
+                            <p>Pobieranie informacji...</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Modal for user details/edit -->
+    <div id="userModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Szczegóły Użytkownika</h2>
+            <div id="userModalBody" class="modal-body">
+                <!-- Dynamically filled -->
+            </div>
+            <div class="modal-footer">
+                <button id="closeUserModalBtn" class="btn btn-secondary">Zamknij</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for resource details -->
+    <div id="resourceModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Szczegóły Zasobu</h2>
+            <div id="resourceModalBody" class="modal-body">
+                <!-- Dynamically filled -->
+            </div>
+            <div class="modal-footer">
+                <button id="closeResourceModalBtn" class="btn btn-secondary">Zamknij</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="notification" class="notification"></div>
+
+    <script src="admin.js"></script>
+</body>
+</html>
