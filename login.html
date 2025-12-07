@@ -33,7 +33,7 @@
         const API_BASE = window.API_CONFIG.BASE_URL;
         
         // Check if already logged in
-        if (localStorage.getItem('jwt_token')) {
+        if (localStorage.getItem('token')) {
             window.location.href = 'dashboard.html';
         }
         
@@ -80,7 +80,7 @@
                 
                 if (response.ok && data.token) {
                     // Save JWT token to localStorage
-                    localStorage.setItem('jwt_token', data.token);
+                    localStorage.setItem('token', data.token);
                     
                     successDiv.textContent = 'Login successful! Redirecting to dashboard...';
                     successDiv.style.display = 'block';
