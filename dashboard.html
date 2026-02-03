@@ -116,12 +116,22 @@
                     if (currentUser.role === 'admin') {
                         document.getElementById('adminLink').style.display = 'inline-block';
                     }
+                } else if (response.status === 401) {
+                    // Token invalid or expired
+                    console.error('Unauthorized - token invalid');
+                    logout();
                 } else {
-                    throw new Error('Failed to load user info');
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
             } catch (error) {
                 console.error('Error loading user info:', error);
-                document.getElementById('userInfo').textContent = 'Error loading user info';
+                if (error.message.includes('Failed to fetch')) {
+                    document.getElementById('userInfo').textContent = 'Błąd: Brak połączenia z serwerem';
+                    showError('Nie można połączyć się z serwerem. Sprawdź czy backend jest uruchomiony na http://localhost:3000');
+                } else {
+                    document.getElementById('userInfo').textContent = 'Error loading user info';
+                    showError('Błąd podczas ładowania danych użytkownika: ' + error.message);
+                }
             }
         }
         
@@ -190,11 +200,15 @@
                 } else if (response.status === 401) {
                     logout();
                 } else {
-                    throw new Error('Failed to load resources');
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
             } catch (error) {
                 console.error('Error loading resources:', error);
-                showError('Błąd podczas ładowania zasobów. Spróbuj odświeżyć stronę.');
+                if (error.message.includes('Failed to fetch')) {
+                    showError('Błąd: Brak połączenia z serwerem. Upewnij się, że backend działa na http://localhost:3000');
+                } else {
+                    showError('Błąd podczas ładowania zasobów: ' + error.message);
+                }
             }
         }
         
