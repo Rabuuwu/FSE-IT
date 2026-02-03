@@ -32,25 +32,30 @@ body {
 /* Sidebar */
 .creator-sidebar {
     width: 240px;
-    background: var(--primary);
-    color: white;
+    background: white;
+    color: var(--text-dark);
     padding: 20px;
     display: flex;
     flex-direction: column;
     position: fixed;
     height: 100vh;
     overflow-y: auto;
-    box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.05);
+    border-right: 1px solid var(--border);
 }
 
 .creator-header {
     margin-bottom: 30px;
-    border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid var(--border);
     padding-bottom: 20px;
 }
 
-.creator-header h2 {
-    font-size: 1.5rem;
+.creator-logo {
+    font-size: 1.4rem;
+    font-weight: 700;
+    text-decoration: none;
+    color: var(--primary);
+    display: inline-block;
     margin-bottom: 5px;
 }
 
@@ -72,13 +77,13 @@ body {
     align-items: center;
     gap: 10px;
     padding: 12px 15px;
-    color: rgba(255, 255, 255, 0.7);
+    color: var(--text-dark);
     text-decoration: none;
     border-radius: 5px;
     transition: all 0.3s ease;
     cursor: pointer;
-    border: none;
-    background: none;
+    border: 1px solid transparent;
+    background: var(--light);
     font-size: 0.95rem;
     text-align: left;
     width: 100%;
@@ -86,8 +91,9 @@ body {
 
 .nav-link:hover,
 .nav-link.active {
-    background: var(--secondary);
-    color: white;
+    background: white;
+    color: var(--primary);
+    border-color: var(--border);
 }
 
 .nav-link .icon {
@@ -95,7 +101,7 @@ body {
 }
 
 .sidebar-footer {
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    border-top: 1px solid var(--border);
     padding-top: 15px;
 }
 
@@ -161,6 +167,7 @@ body {
 .mode-actions {
     display: flex;
     gap: 10px;
+    flex-wrap: wrap;
 }
 
 /* Form Styles */

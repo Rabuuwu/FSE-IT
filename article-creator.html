@@ -14,7 +14,7 @@
         <!-- Sidebar Navigation -->
         <aside class="creator-sidebar">
             <div class="creator-header">
-                <h2>FSE-IT</h2>
+                <a href="dashboard.html" class="creator-logo">FSE-IT</a>
                 <p id="userEmail" class="user-info">Ładowanie...</p>
             </div>
             
@@ -24,9 +24,6 @@
                 </a>
                 <a href="#" class="nav-link" data-mode="course">
                     <span class="icon">📚</span> Kurs
-                </a>
-                <a href="dashboard.html" class="nav-link">
-                    <span class="icon">📊</span> Dashboard
                 </a>
             </nav>
 
@@ -42,6 +39,8 @@
                 <div class="mode-header">
                     <h1>Utwórz Artykuł Edukacyjny</h1>
                     <div class="mode-actions">
+                        <button id="backArticleBtn" class="btn btn-secondary">↩ Powrót</button>
+                        <button id="cancelArticleBtn" class="btn btn-secondary">✖ Anuluj</button>
                         <button id="previewArticleBtn" class="btn btn-secondary">👁️ Podgląd</button>
                         <button id="saveArticleBtn" class="btn btn-primary">💾 Opublikuj</button>
                     </div>
@@ -98,6 +97,8 @@
                 <div class="mode-header">
                     <h1>Utwórz Kurs</h1>
                     <div class="mode-actions">
+                        <button id="backCourseBtn" class="btn btn-secondary">↩ Powrót</button>
+                        <button id="cancelCourseBtn" class="btn btn-secondary">✖ Anuluj</button>
                         <button id="previewCourseBtn" class="btn btn-secondary">👁️ Podgląd</button>
                         <button id="saveCourseBtn" class="btn btn-primary">💾 Opublikuj Kurs</button>
                     </div>

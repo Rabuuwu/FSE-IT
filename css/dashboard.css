@@ -292,3 +292,93 @@ textarea:focus {
     font-style: italic;
     padding: 2rem;
 }
+
+/* Materials View */
+.materials-controls {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+}
+
+.materials-search,
+.materials-select {
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    font-size: 0.95rem;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.materials-search {
+    flex: 1;
+    min-width: 220px;
+}
+
+.materials-search:focus,
+.materials-select:focus {
+    outline: none;
+    border-color: var(--secondary);
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+}
+
+.materials-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 1rem;
+}
+
+.material-card {
+    background: white;
+    border-radius: 8px;
+    padding: 1.25rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    border: 1px solid #f0f0f0;
+}
+
+.material-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.75rem;
+    font-size: 0.85rem;
+    color: var(--text-light);
+}
+
+.material-type {
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.7rem;
+    background: var(--light);
+    color: var(--text-dark);
+}
+
+.material-type.article {
+    background: rgba(39, 174, 96, 0.15);
+    color: #1f7f4d;
+}
+
+.material-type.course {
+    background: rgba(52, 152, 219, 0.15);
+    color: #216a94;
+}
+
+.material-title {
+    font-size: 1.1rem;
+    color: var(--primary);
+    margin-bottom: 0.5rem;
+}
+
+.material-preview {
+    color: var(--text-dark);
+    font-size: 0.9rem;
+    line-height: 1.5;
+    margin-bottom: 0.75rem;
+}
+
+.material-meta {
+    font-size: 0.85rem;
+    color: var(--text-light);
+}

@@ -276,6 +276,13 @@ async function viewCourse(courseId) {
 function updateCounters() {
     const allCount = allArticles.length + allCourses.length;
     document.getElementById('contentCount').textContent = `${allCount} materiałów`;
+    const allCountEl = document.getElementById('allCount');
+    const articleCountEl = document.getElementById('articleCount');
+    const courseCountEl = document.getElementById('courseCount');
+
+    if (allCountEl) allCountEl.textContent = allCount;
+    if (articleCountEl) articleCountEl.textContent = allArticles.length;
+    if (courseCountEl) courseCountEl.textContent = allCourses.length;
 }
 
 // Setup event listeners

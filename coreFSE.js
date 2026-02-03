@@ -6,6 +6,7 @@ import jwt from 'jsonwebtoken';
 import { authMiddleware } from './auth.js';
 
 const app = express();
+const DEBUG = process.env.DEBUG === 'true' || process.env.NODE_ENV !== 'production';
 
 // CORS middleware for production deployment
 app.use((req, res, next) => {
@@ -21,25 +22,19 @@ app.use((req, res, next) => {
     ];
     
     const origin = req.headers.origin;
-    console.log(`CORS: Request from origin: ${origin}`);
     
     if (allowedOrigins.includes(origin)) {
         res.setHeader('Access-Control-Allow-Origin', origin);
-        console.log(`CORS: Allowed origin ${origin}`);
     } else {
-        // For production, allow the main Netlify domain as fallback
         res.setHeader('Access-Control-Allow-Origin', 'https://fse-it.netlify.app');
-        console.log(`CORS: Unknown origin ${origin}, using default Netlify domain`);
     }
     
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
     res.setHeader('Access-Control-Allow-Credentials', 'true');
-    res.setHeader('Access-Control-Max-Age', '86400'); // 24 hours
+    res.setHeader('Access-Control-Max-Age', '86400');
     
-    // Handle preflight requests
     if (req.method === 'OPTIONS') {
-        console.log('CORS: Handling preflight OPTIONS request');
         res.status(200).end();
         return;
     }
@@ -67,32 +62,23 @@ app.get('/', (req, res) => {
     });
 });
 
-// Ensure users table exists
 async function ensureSchema() {
     try {
-        console.log('Setting up database schema...');
+        if (DEBUG) console.log('Setting up database schema...');
         
-        // Check if users table exists and has correct structure
+        // Check if users table exists
         const tableCheck = await pool.query(`
             SELECT column_name, data_type
             FROM information_schema.columns 
             WHERE table_name = 'users'
         `);
         
-        if (tableCheck.rows.length > 0) {
-            console.log('Users table exists, checking structure...');
+        if (tableCheck.rows.length > 0 && DEBUG) {
             const columns = tableCheck.rows.map(row => row.column_name);
-            console.log('Existing columns:', columns);
-            
-            // Check if password_hash column exists or role is not integer
-            const roleColumn = tableCheck.rows.find(row => row.column_name === 'role');
-            if (!columns.includes('password_hash') || (roleColumn && roleColumn.data_type !== 'integer')) {
-                console.warn('⚠️  Incorrect users table structure detected; not dropping tables automatically.');
-                console.warn('Please run a proper migration or adjust schema manually to avoid data loss.');
-            }
+            console.log('✅ Users table exists with columns:', columns);
         }
         
-        // Create roles table first
+        // Create roles table
         await pool.query(`
             CREATE TABLE IF NOT EXISTS roles (
                 id SERIAL PRIMARY KEY,
@@ -101,9 +87,8 @@ async function ensureSchema() {
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
             )
         `);
-        console.log('✅ Roles table ready');
         
-        // Insert default roles if they don't exist
+        // Insert default roles
         await pool.query(`
             INSERT INTO roles (id, name, description) 
             VALUES 
@@ -111,9 +96,8 @@ async function ensureSchema() {
                 (2, 'admin', 'Administrator with full access')
             ON CONFLICT (name) DO NOTHING
         `);
-        console.log('✅ Default roles inserted');
         
-        // Create users table with role as foreign key
+        // Create users table
         await pool.query(`
             CREATE TABLE IF NOT EXISTS users (
                 id SERIAL PRIMARY KEY,
@@ -123,7 +107,6 @@ async function ensureSchema() {
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
             )
         `);
-        console.log('✅ Users table ready');
         
         // Create articles table
         await pool.query(`
@@ -138,7 +121,6 @@ async function ensureSchema() {
                 updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
             )
         `);
-        console.log('✅ Articles table ready');
 
         // Create courses table
         await pool.query(`
@@ -151,7 +133,6 @@ async function ensureSchema() {
                 updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
             )
         `);
-        console.log('✅ Courses table ready');
 
         // Create course stages table
         await pool.query(`
@@ -166,9 +147,8 @@ async function ensureSchema() {
                 UNIQUE(course_id, stage_number)
             )
         `);
-        console.log('✅ Course stages table ready');
 
-        // Legacy resources table for backwards compatibility
+        // Resources table
         await pool.query(`
             CREATE TABLE IF NOT EXISTS resources (
                 id SERIAL PRIMARY KEY,
@@ -177,11 +157,10 @@ async function ensureSchema() {
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
             )
         `);
-        console.log('✅ Resources table ready');
         
-        console.log('✅ Schema setup complete');
+        if (DEBUG) console.log('✅ Database schema initialized');
     } catch (err) {
-        console.error('❌ Error ensuring schema:', err);
+        console.error('❌ Database schema error:', err.message);
         throw err;
     }
 }
@@ -209,16 +188,10 @@ app.post('/register', async (req, res) => {
         if (err && err.code === '23505') {
             return res.status(409).json({ error: 'Email already registered' });
         }
-        console.error('Register error:', err);
-        console.error('Error details:', {
-            message: err.message,
-            code: err.code,
-            detail: err.detail,
-            stack: err.stack
-        });
+        if (DEBUG) console.error('Register error:', err.message);
         return res.status(500).json({ 
             error: 'Internal server error',
-            details: process.env.NODE_ENV === 'production' ? undefined : err.message 
+            details: DEBUG ? err.message : undefined
         });
     }
 });
@@ -250,23 +223,38 @@ app.post('/login', async (req, res) => {
 
         const payload = { user_id: user.id, role_id: user.role_id, role: user.role_name || 'user' };
         const secret = process.env.JWT_SECRET || 'dev_jwt_secret_change_me';
-        if (!process.env.JWT_SECRET) {
-            console.warn('JWT_SECRET is not set — using insecure default secret. Set JWT_SECRET in your .env for production.');
+        if (!process.env.JWT_SECRET && DEBUG) {
+            console.warn('⚠️  JWT_SECRET not set: using default. Set JWT_SECRET in production.');
         }
 
         const token = jwt.sign(payload, secret, { expiresIn: process.env.JWT_EXPIRES_IN || '1h' });
 
         return res.json({ token });
     } catch (err) {
-        console.error('Login error:', err);
+        if (DEBUG) console.error('Login error:', err.message);
         return res.status(500).json({ error: 'Internal server error' });
     }
 });
 
 // Example protected route to test authMiddleware
-app.get('/me', authMiddleware, (req, res) => {
-    // req.user is set by authMiddleware
-    return res.json({ user: req.user });
+app.get('/me', authMiddleware, async (req, res) => {
+    try {
+        const userId = req.user && req.user.user_id;
+        const result = await pool.query(
+            'SELECT id, email, role FROM users WHERE id = $1',
+            [userId]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        const user = result.rows[0];
+        return res.json({ user: { user_id: user.id, email: user.email, role: user.role } });
+    } catch (err) {
+        if (DEBUG) console.error('GET /me error:', err.message);
+        return res.status(500).json({ error: 'Internal server error' });
+    }
 });
 
 // GET /resources - returns resources owned by the authenticated user
@@ -279,7 +267,7 @@ app.get('/resources', authMiddleware, async (req, res) => {
         );
         return res.json({ resources: result.rows });
     } catch (err) {
-        console.error('GET /resources error:', err);
+        if (DEBUG) console.error('GET /resources error:', err.message);
         return res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -298,7 +286,7 @@ app.post('/resources', authMiddleware, async (req, res) => {
 
         return res.status(201).json({ resource: inserted.rows[0] });
     } catch (err) {
-        console.error('POST /resources error:', err);
+        if (DEBUG) console.error('POST /resources error:', err.message);
         return res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -329,7 +317,7 @@ app.delete('/resources/:id', authMiddleware, async (req, res) => {
         await pool.query('DELETE FROM resources WHERE id = $1', [resourceId]);
         return res.json({ message: 'Resource deleted' });
     } catch (err) {
-        console.error('DELETE /resources/:id error:', err);
+        if (DEBUG) console.error('DELETE /resources/:id error:', err.message);
         return res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -351,7 +339,7 @@ app.get('/users', authMiddleware, async (req, res) => {
 
         return res.json(result.rows);
     } catch (err) {
-        console.error('GET /users error:', err);
+        if (DEBUG) console.error('GET /users error:', err.message);
         return res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -382,7 +370,7 @@ app.delete('/users/:id', authMiddleware, async (req, res) => {
 
         return res.json({ message: 'User deleted' });
     } catch (err) {
-        console.error('DELETE /users/:id error:', err);
+        if (DEBUG) console.error('DELETE /users/:id error:', err.message);
         return res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -400,7 +388,7 @@ app.get('/admin/resources', authMiddleware, async (req, res) => {
 
         return res.json(result.rows);
     } catch (err) {
-        console.error('GET /admin/resources error:', err);
+        if (DEBUG) console.error('GET /admin/resources error:', err.message);
         return res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -412,7 +400,7 @@ app.post('/admin/reset', authMiddleware, async (req, res) => {
             return res.status(403).json({ error: 'Forbidden - Admin only' });
         }
 
-        console.warn('⚠️  ADMIN ACTION: Database reset initiated by', req.user.email);
+        if (DEBUG) console.warn('⚠️  ADMIN ACTION: Database reset initiated by', req.user.email);
 
         // Delete all data while preserving schema
         await pool.query('DELETE FROM resources');
@@ -428,10 +416,10 @@ app.post('/admin/reset', authMiddleware, async (req, res) => {
             ON CONFLICT (name) DO NOTHING
         `);
 
-        console.log('✅ Database reset completed');
+        if (DEBUG) console.log('✅ Database reset completed');
         return res.json({ message: 'Database reset completed' });
     } catch (err) {
-        console.error('POST /admin/reset error:', err);
+        if (DEBUG) console.error('POST /admin/reset error:', err.message);
         return res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -449,7 +437,7 @@ app.get('/articles', authMiddleware, async (req, res) => {
 
         return res.json(result.rows);
     } catch (err) {
-        console.error('GET /articles error:', err);
+        if (DEBUG) console.error('GET /articles error:', err.message);
         return res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -523,7 +511,7 @@ app.delete('/articles/:id', authMiddleware, async (req, res) => {
         await pool.query('DELETE FROM articles WHERE id = $1', [articleId]);
         return res.json({ message: 'Article deleted' });
     } catch (err) {
-        console.error('DELETE /articles/:id error:', err);
+        if (DEBUG) console.error('DELETE /articles/:id error:', err.message);
         return res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -554,7 +542,7 @@ app.get('/courses', authMiddleware, async (req, res) => {
 
         return res.json(courses);
     } catch (err) {
-        console.error('GET /courses error:', err);
+        if (DEBUG) console.error('GET /courses/:id error:', err.message);
         return res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -658,38 +646,31 @@ app.delete('/courses/:id', authMiddleware, async (req, res) => {
 
         return res.json({ message: 'Course deleted' });
     } catch (err) {
-        console.error('DELETE /courses/:id error:', err);
+        if (DEBUG) console.error('DELETE /courses/:id error:', err.message);
         return res.status(500).json({ error: 'Internal server error' });
     }
 });
 
 async function start() {
     try {
-        console.log('Starting FSE-IT API Server...');
-        console.log('DATABASE_URL configured:', !!process.env.DATABASE_URL);
-        console.log('PORT:', PORT);
+        if (DEBUG) console.log('Starting FSE-IT API Server...');
+        if (DEBUG) console.log('DATABASE_URL configured:', !!process.env.DATABASE_URL);
         
         // Test database connection first
-        console.log('Testing database connection...');
         const testResult = await pool.query('SELECT NOW() as current_time');
-        console.log('Database connected successfully at:', testResult.rows[0].current_time);
+        if (DEBUG) console.log('Database connected at:', testResult.rows[0].current_time);
         
         // Create schema tables
         await ensureSchema();
         
         // Start listening
         app.listen(PORT, () => {
-            console.log(`✅ Server listening on port ${PORT}`);
-            console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+            console.log(`✅ FSE-IT Server listening on port ${PORT} (${process.env.NODE_ENV || 'development'})`);
         });
     } catch (err) {
-        console.error('❌ Failed to start application:', err);
-        console.error('Error details:', {
-            message: err.message,
-            code: err.code,
-            stack: err.stack
-        });
-        
+        console.error('❌ Server startup error:', err.message);
+        if (DEBUG) console.error('Details:', { code: err.code, stack: err.stack });
+        process.exit(1);
         // Check if it's a database connection error
         if (err.message && err.message.includes('ENOTFOUND')) {
             console.error('⚠️  DATABASE CONNECTION ERROR: Cannot connect to database');

@@ -21,8 +21,8 @@
     <div class="container">
         <!-- Navigation Menu -->
         <nav class="main-nav">
-            <a href="dashboard.html" class="nav-item active">📊 Dashboard</a>
-            <a href="article-viewer.html" class="nav-item">📚 Materiały</a>
+            <a href="#" class="nav-item active" data-view="resources" id="navDashboard">📊 Dashboard</a>
+            <a href="#" class="nav-item" data-view="materials" id="navMaterials">📚 Materiały</a>
             <a href="article-creator.html" class="nav-item">✏️ Utwórz</a>
             <a href="admin.html" class="nav-item" id="adminLink" style="display:none;">👑 Admin</a>
         </nav>
@@ -32,26 +32,26 @@
             <div class="stat-card">
                 <h3>Moje Artykuły</h3>
                 <p class="stat-value" id="myArticlesCount">0</p>
-                <a href="article-viewer.html" class="stat-link">Przejdź →</a>
+                <a href="#" class="stat-link" onclick="switchView('materials'); return false;">Przejdź →</a>
             </div>
             <div class="stat-card">
                 <h3>Moje Kursy</h3>
                 <p class="stat-value" id="myCoursesCount">0</p>
-                <a href="article-viewer.html" class="stat-link">Przejdź →</a>
+                <a href="#" class="stat-link" onclick="switchView('materials'); return false;">Przejdź →</a>
             </div>
             <div class="stat-card">
                 <h3>Moje Zasoby</h3>
                 <p class="stat-value" id="myResourcesCount">0</p>
-                <a href="#" class="stat-link">Przejdź →</a>
+                <a href="#" class="stat-link" onclick="switchView('resources'); return false;">Przejdź →</a>
             </div>
             <div class="stat-card">
                 <h3>Wszystkie Materiały</h3>
                 <p class="stat-value" id="totalMaterialsCount">0</p>
-                <a href="article-viewer.html" class="stat-link">Przejdź →</a>
+                <a href="#" class="stat-link" onclick="switchView('materials'); return false;">Przejdź →</a>
             </div>
         </div>
 
-        <div class="section">
+        <div class="section" id="resourcesSection">
             <div class="resources-header">
                 <h2>Moje Zasoby</h2>
                 <div class="header-actions">
@@ -78,11 +78,37 @@
                 <div class="loading">Ładowanie zasobów...</div>
             </div>
         </div>
+
+        <div class="section" id="materialsSection" style="display:none;">
+            <div class="resources-header">
+                <h2>Materiały edukacyjne</h2>
+                <div class="header-actions">
+                    <button class="btn btn-secondary" onclick="switchView('resources')">Pokaż zasoby</button>
+                    <a href="article-creator.html" class="btn" style="text-decoration: none; display: inline-block;">Utwórz materiał</a>
+                </div>
+            </div>
+
+            <div class="materials-controls">
+                <input type="text" id="materialsSearch" placeholder="Szukaj materiałów..." class="materials-search" />
+                <select id="materialsType" class="materials-select">
+                    <option value="all">Wszystkie</option>
+                    <option value="article">Artykuły</option>
+                    <option value="course">Kursy</option>
+                </select>
+            </div>
+
+            <div id="materialsList" class="materials-grid">
+                <div class="loading">Ładowanie materiałów...</div>
+            </div>
+        </div>
     </div>
 
     <script>
-        const API_BASE = window.location.origin;
+        const API_BASE = window.API_CONFIG.BASE_URL;
         let currentUser = null;
+        let allArticles = [];
+        let allCourses = [];
+        let materialsLoaded = false;
         
         // Check authentication on page load
         window.addEventListener('DOMContentLoaded', () => {
@@ -92,10 +118,46 @@
                 return;
             }
             
+            setupViewNavigation();
             loadUserInfo();
             loadResources();
             loadStatistics();
         });
+
+        function setupViewNavigation() {
+            document.querySelectorAll('.main-nav .nav-item[data-view]').forEach(link => {
+                link.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const view = link.getAttribute('data-view');
+                    switchView(view);
+                });
+            });
+
+            document.getElementById('materialsSearch')?.addEventListener('input', filterMaterials);
+            document.getElementById('materialsType')?.addEventListener('change', filterMaterials);
+        }
+
+        function switchView(view) {
+            const resourcesSection = document.getElementById('resourcesSection');
+            const materialsSection = document.getElementById('materialsSection');
+            const navDashboard = document.getElementById('navDashboard');
+            const navMaterials = document.getElementById('navMaterials');
+
+            if (view === 'materials') {
+                resourcesSection.style.display = 'none';
+                materialsSection.style.display = 'block';
+                navDashboard.classList.remove('active');
+                navMaterials.classList.add('active');
+                if (!materialsLoaded) {
+                    loadMaterials();
+                }
+            } else {
+                resourcesSection.style.display = 'block';
+                materialsSection.style.display = 'none';
+                navMaterials.classList.remove('active');
+                navDashboard.classList.add('active');
+            }
+        }
         
         // Load current user information
         async function loadUserInfo() {
@@ -183,6 +245,84 @@
                 console.error('Error loading statistics:', error);
             }
         }
+
+        async function loadMaterials() {
+            const token = localStorage.getItem('token');
+            try {
+                const [articlesRes, coursesRes] = await Promise.all([
+                    fetch(`${API_BASE}/articles`, { headers: { 'Authorization': `Bearer ${token}` } }),
+                    fetch(`${API_BASE}/courses`, { headers: { 'Authorization': `Bearer ${token}` } })
+                ]);
+
+                if (articlesRes.ok) {
+                    allArticles = await articlesRes.json();
+                }
+
+                if (coursesRes.ok) {
+                    allCourses = await coursesRes.json();
+                }
+
+                materialsLoaded = true;
+                filterMaterials();
+            } catch (error) {
+                console.error('Error loading materials:', error);
+                const materialsList = document.getElementById('materialsList');
+                materialsList.innerHTML = '<div class="empty-state">Błąd podczas ładowania materiałów.</div>';
+            }
+        }
+
+        function filterMaterials() {
+            const typeFilter = document.getElementById('materialsType')?.value || 'all';
+            const searchQuery = (document.getElementById('materialsSearch')?.value || '').toLowerCase();
+            let content = [];
+
+            if (typeFilter === 'all' || typeFilter === 'article') {
+                content = content.concat(allArticles.map(a => ({ ...a, contentType: 'article' })));
+            }
+            if (typeFilter === 'all' || typeFilter === 'course') {
+                content = content.concat(allCourses.map(c => ({ ...c, contentType: 'course' })));
+            }
+
+            if (searchQuery) {
+                content = content.filter(item =>
+                    item.title.toLowerCase().includes(searchQuery) ||
+                    (item.summary && item.summary.toLowerCase().includes(searchQuery)) ||
+                    (item.description && item.description.toLowerCase().includes(searchQuery)) ||
+                    (item.author_email && item.author_email.toLowerCase().includes(searchQuery))
+                );
+            }
+
+            displayMaterials(content);
+        }
+
+        function displayMaterials(content) {
+            const materialsList = document.getElementById('materialsList');
+
+            if (!content.length) {
+                materialsList.innerHTML = '<div class="empty-state">Brak materiałów do wyświetlenia.</div>';
+                return;
+            }
+
+            materialsList.innerHTML = content.map(item => {
+                const isArticle = item.contentType === 'article';
+                const label = isArticle ? 'Artykuł' : 'Kurs';
+                const preview = isArticle
+                    ? (item.summary || item.content?.substring(0, 120) || 'Brak opisu')
+                    : (item.description || 'Brak opisu');
+
+                return `
+                    <div class="material-card">
+                        <div class="material-header">
+                            <span class="material-type ${item.contentType}">${label}</span>
+                            <span class="material-date">${new Date(item.created_at).toLocaleDateString('pl-PL')}</span>
+                        </div>
+                        <h3 class="material-title">${escapeHtml(item.title)}</h3>
+                        <p class="material-preview">${escapeHtml(preview.substring(0, 160))}${preview.length > 160 ? '...' : ''}</p>
+                        <div class="material-meta">Autor: ${escapeHtml(item.author_email || 'Nieznany')}</div>
+                    </div>
+                `;
+            }).join('');
+        }
         
         // Load user resources
         async function loadResources() {
@@ -197,6 +337,8 @@
                 if (response.ok) {
                     const data = await response.json();
                     displayResources(data.resources);
+                } else if (response.status === 404) {
+                    displayResources([]);
                 } else if (response.status === 401) {
                     logout();
                 } else {
@@ -325,6 +467,18 @@
         function logout() {
             localStorage.removeItem('token');
             window.location.href = 'login.html';
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return text.replace(/[&<>"']/g, m => map[m]);
         }
     </script>
 </body>

@@ -6,6 +6,7 @@
     <title>FSE-IT - Login</title>
     <link rel="stylesheet" href="css/login.css">
     <script src="config.js"></script>
+    <script src="utils.js"></script>
 </head>
 <body>
     <div class="container">
@@ -33,7 +34,7 @@
         const API_BASE = window.API_CONFIG.BASE_URL;
         
         // Check if already logged in
-        if (localStorage.getItem('token')) {
+        if (hasAuthToken()) {
             window.location.href = 'dashboard.html';
         }
         
@@ -55,8 +56,6 @@
             submitBtn.textContent = 'Logging in...';
             
             try {
-                console.log('Sending login request to:', `${API_BASE}/login`);
-                
                 const response = await fetch(`${API_BASE}/login`, {
                     method: 'POST',
                     headers: {
@@ -65,23 +64,15 @@
                     body: JSON.stringify({ email, password })
                 });
                 
-                console.log('Response status:', response.status);
-                
-                // Check if response is JSON
                 const contentType = response.headers.get('content-type');
                 if (!contentType || !contentType.includes('application/json')) {
-                    const text = await response.text();
-                    console.error('Non-JSON response:', text);
-                    throw new Error(`Server returned non-JSON response (${response.status}). Server may be sleeping or down.`);
+                    throw new Error(`Server error (${response.status}). Backend may be starting.`);
                 }
                 
                 const data = await response.json();
-                console.log('Response data:', data);
                 
                 if (response.ok && data.token) {
-                    // Save JWT token to localStorage
                     localStorage.setItem('token', data.token);
-                    
                     successDiv.textContent = 'Login successful! Redirecting to dashboard...';
                     successDiv.style.display = 'block';
                     
@@ -93,11 +84,8 @@
                     errorDiv.style.display = 'block';
                 }
             } catch (error) {
-                console.error('Login error:', error);
-                if (error.message.includes('Server may be sleeping')) {
-                    errorDiv.textContent = 'Server is starting up (sleep mode). Please wait 30 seconds and try again.';
-                } else if (error.message.includes('Failed to fetch')) {
-                    errorDiv.textContent = 'Cannot connect to server. Please check if the backend is running.';
+                if (error.message.includes('Failed to fetch')) {
+                    errorDiv.textContent = 'Cannot connect to server. Backend may be sleeping.';
                 } else {
                     errorDiv.textContent = error.message || 'Network error. Please try again.';
                 }

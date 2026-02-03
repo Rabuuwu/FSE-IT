@@ -88,11 +88,15 @@ function setupEventListeners() {
     document.getElementById('previewArticleBtn')?.addEventListener('click', previewArticle);
     document.getElementById('exportArticleBtn')?.addEventListener('click', exportArticle);
     document.getElementById('importFileBtn')?.addEventListener('click', importFile);
+    document.getElementById('cancelArticleBtn')?.addEventListener('click', resetArticleForm);
+    document.getElementById('backArticleBtn')?.addEventListener('click', goToDashboard);
 
     // Course buttons
     document.getElementById('saveCourseBtn')?.addEventListener('click', saveCourse);
     document.getElementById('previewCourseBtn')?.addEventListener('click', previewCourse);
     document.getElementById('addStageBtn')?.addEventListener('click', addCourseStage);
+    document.getElementById('cancelCourseBtn')?.addEventListener('click', resetCourseForm);
+    document.getElementById('backCourseBtn')?.addEventListener('click', goToDashboard);
 
     // Logout
     document.getElementById('logoutBtn').addEventListener('click', logout);
@@ -182,10 +186,11 @@ async function saveArticle() {
         document.getElementById('articleTitle').value = '';
         document.getElementById('articleSummary').value = '';
         editor.value('');
+        document.getElementById('publishArticle').checked = true;
 
         // Redirect to articles view
         setTimeout(() => {
-            window.location.href = 'articles.html';
+            window.location.href = 'dashboard.html';
         }, 1500);
     } catch (err) {
         console.error('Save article error:', err);
@@ -373,12 +378,36 @@ async function saveCourse() {
 
         // Redirect to courses view
         setTimeout(() => {
-            window.location.href = 'courses.html';
+            window.location.href = 'dashboard.html';
         }, 1500);
     } catch (err) {
         console.error('Save course error:', err);
         showNotification('Błąd podczas zapisywania kursu', 'error');
     }
+}
+
+function resetArticleForm() {
+    if (!confirm('Czy na pewno chcesz wyczyścić formularz artykułu?')) {
+        return;
+    }
+    document.getElementById('articleTitle').value = '';
+    document.getElementById('articleSummary').value = '';
+    editor.value('');
+    document.getElementById('publishArticle').checked = true;
+}
+
+function resetCourseForm() {
+    if (!confirm('Czy na pewno chcesz wyczyścić formularz kursu?')) {
+        return;
+    }
+    document.getElementById('courseTitle').value = '';
+    document.getElementById('courseDescription').value = '';
+    courseStages = [];
+    renderCourseStages();
+}
+
+function goToDashboard() {
+    window.location.href = 'dashboard.html';
 }
 
 // Add course stage
