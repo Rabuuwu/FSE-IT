@@ -1,0 +1,27 @@
+# Core API only. ML is packaged independently; platform choice is still pending.
+services:
+  - type: web
+    name: fse-it
+    runtime: node
+    plan: free
+    autoDeploy: false
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /ready
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: 22
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ML_SERVICE_TOKEN
+        sync: false
+      - key: ML_URL
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: PGPOOL_MAX
+        value: 5

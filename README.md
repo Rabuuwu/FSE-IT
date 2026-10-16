@@ -1,5 +1,22 @@
 # 🚀 FSE-IT: Full-Stack Self-Development IT System
 
+## Implementation plan
+
+Plan realizacji i wdrożenia, stan prac oraz kryteria odbioru: [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md).
+
+### Current implementation (2026-10-16)
+
+Local changes add a shared catalogue (links, PDFs, articles and courses), tags/search, admin CRUD and publication, ratings/activity, an independent Python recommendation API, current-role authorization, explicit database migrations and real-stack CI/E2E configuration. Existing private data is retained; migrated articles/courses are drafts. Old page URLs redirect to the shared catalogue.
+
+**Verification:** seven Node unit tests and six Python model tests pass locally. Database integration, browser E2E, restore rehearsal, dependency lockfile and live deployment are pending; this is not a verified production release.
+
+- [Local setup and verification](docs/LOCAL_SETUP.md)
+- [API contract](docs/API.md)
+- [Deployment and recovery](docs/DEPLOYMENT.md)
+
+The requirements below describe the original project goal. Hosting alternatives in those sections are historical options, not confirmed current free offers. See the deployment document for verified constraints and outstanding choices.
+
+
 ## 🌟 Primary Goal
 
 The main goal of this project is to build a complex, production-ready **Educational Resource Management System** integrating **Machine Learning (ML)** and **Automated Testing**, all hosted on a sustainable **Zero-Cost Architecture**.

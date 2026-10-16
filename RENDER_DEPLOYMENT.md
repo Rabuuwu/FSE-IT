@@ -1,33 +1,23 @@
-# Render Deployment Configuration
+# Render Core API deployment
 
-## Environment Variables needed on Render:
+The complete release procedure is in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). Do not deploy against existing data until a migration rehearsal, tested backup and full-stack checks pass.
 
-```
+`render.yaml` describes the Core service only. Build: `npm install` (switch to `npm ci` after generating/reviewing the lockfile). Start: `npm start`. Healthcheck: `/ready`. Automatic deployment is disabled so migrations remain a controlled release step.
+
+Required environment:
+
+```text
 NODE_ENV=production
-PORT=3000
-DATABASE_URL=your_postgres_connection_string
-JWT_SECRET=your_secure_jwt_secret_here
-JWT_EXPIRES_IN=24h
-BCRYPT_SALT_ROUNDS=12
+DATABASE_URL=<PostgreSQL URL>
+JWT_SECRET=<32+ random characters>
+ML_SERVICE_TOKEN=<32+ random characters, same as Python>
+ML_URL=<Python HTTPS origin>
+CORS_ORIGINS=<exact frontend HTTPS origin>
+PGPOOL_MAX=5
 ```
 
-## Build Command:
-```
-npm install
-```
+`PORT` is supplied by Render. Optional settings: `JWT_EXPIRES_IN`, `BCRYPT_SALT_ROUNDS` (10–15), `DATABASE_CA` and verified `TRUST_PROXY_HOPS`. Database TLS certificate verification is enabled in production.
 
-## Start Command:
-```
-node coreFSE.js
-```
+Run the tested `npm run migrate` separately before starting this release. Build the frontend with `FRONTEND_API_URL=<Core HTTPS origin> npm run build`, and publish only `dist/`. Source configuration is `config.js` in the repository root.
 
-## Important Notes:
-1. Make sure to set DATABASE_URL to your PostgreSQL connection string
-2. Generate a secure JWT_SECRET (use a random string generator)
-3. The app will run on the PORT provided by Render automatically
-4. Update the API URL in js/config.js with your actual Render app URL
-
-## Your Render App URL will be something like:
-https://your-app-name.onrender.com
-
-Replace "your-render-app-name" in js/config.js with your actual app name.
+Actual deployment URLs/accounts have not been verified. ML provider selection and the complete four-platform zero-cost arrangement are still pending; this file is not evidence of a deployed release.

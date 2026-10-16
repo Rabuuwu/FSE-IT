@@ -2,6 +2,7 @@
 // Automatically detects the correct API URL based on environment
 
 function getApiUrl() {
+    if (window.FSE_API_URL) return window.FSE_API_URL;
     // Check if we're running locally
     if (window.location.hostname === 'localhost' || 
         window.location.hostname === '127.0.0.1' || 
@@ -16,12 +17,10 @@ function getApiUrl() {
 // Export the API base URL
 window.API_CONFIG = {
     BASE_URL: getApiUrl(),
-    TIMEOUT: 10000, // 10 seconds timeout
+    TIMEOUT: 65000, // Allow a sleeping free-tier Core API to start.
     
     // Helper methods
     getEndpoint: function(path) {
         return this.BASE_URL + (path.startsWith('/') ? path : '/' + path);
     }
 };
-
-console.log('API Configuration loaded:', window.API_CONFIG.BASE_URL);

@@ -22,7 +22,7 @@
             </div>
             <button type="submit" class="btn" id="submitBtn">Login</button>
         </form>
-        <div id="error" class="error"></div>
+        <div id="error" class="error" role="alert"></div>
         <div id="success" class="success"></div>
         <div class="links">
             <a href="index.html">← Back to Home</a>
@@ -31,70 +31,16 @@
     </div>
 
     <script>
-        const API_BASE = window.API_CONFIG.BASE_URL;
-        
-        // Check if already logged in
-        if (hasAuthToken()) {
-            window.location.href = 'dashboard.html';
-        }
-        
-        document.getElementById('loginForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            
-            const email = document.getElementById('email').value;
-            const password = document.getElementById('password').value;
-            const submitBtn = document.getElementById('submitBtn');
-            const errorDiv = document.getElementById('error');
-            const successDiv = document.getElementById('success');
-            
-            // Reset messages
-            errorDiv.style.display = 'none';
-            successDiv.style.display = 'none';
-            
-            // Disable button during request
-            submitBtn.disabled = true;
-            submitBtn.textContent = 'Logging in...';
-            
-            try {
-                const response = await fetch(`${API_BASE}/login`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ email, password })
-                });
-                
-                const contentType = response.headers.get('content-type');
-                if (!contentType || !contentType.includes('application/json')) {
-                    throw new Error(`Server error (${response.status}). Backend may be starting.`);
-                }
-                
-                const data = await response.json();
-                
-                if (response.ok && data.token) {
-                    localStorage.setItem('token', data.token);
-                    successDiv.textContent = 'Login successful! Redirecting to dashboard...';
-                    successDiv.style.display = 'block';
-                    
-                    setTimeout(() => {
-                        window.location.href = 'dashboard.html';
-                    }, 1500);
-                } else {
-                    errorDiv.textContent = data.error || 'Login failed';
-                    errorDiv.style.display = 'block';
-                }
-            } catch (error) {
-                if (error.message.includes('Failed to fetch')) {
-                    errorDiv.textContent = 'Cannot connect to server. Backend may be sleeping.';
-                } else {
-                    errorDiv.textContent = error.message || 'Network error. Please try again.';
-                }
-                errorDiv.style.display = 'block';
-            } finally {
-                submitBtn.disabled = false;
-                submitBtn.textContent = 'Login';
-            }
-        });
+    document.getElementById('loginForm').addEventListener('submit', async event => {
+        event.preventDefault();
+        const button=document.getElementById('submitBtn'), error=document.getElementById('error');
+        button.disabled=true;error.style.display='none';
+        try {
+            const data=await api('/login',{method:'POST',body:JSON.stringify({email:document.getElementById('email').value,password:document.getElementById('password').value})});
+            localStorage.setItem('token',data.token);location.assign('catalog.html');
+        } catch(err) { error.textContent=err.message;error.style.display='block'; }
+        finally { button.disabled=false; }
+    });
     </script>
 </body>
 </html>

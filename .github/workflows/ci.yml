@@ -1,0 +1,67 @@
+name: Verify FSE-IT
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: fse
+          POSTGRES_PASSWORD: test_only
+          POSTGRES_DB: fse_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U fse -d fse_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://fse:test_only@127.0.0.1:5432/fse_test
+      TEST_DATABASE_URL: postgresql://fse:test_only@127.0.0.1:5432/fse_test
+      JWT_SECRET: ci-jwt-secret-used-only-in-isolated-tests
+      BCRYPT_SALT_ROUNDS: '10'
+      ML_SERVICE_TOKEN: ci-ml-token-used-only-in-isolated-tests
+      ML_URL: http://127.0.0.1:8000
+      CORE_INTERNAL_URL: http://127.0.0.1:3000
+      CORS_ORIGINS: http://127.0.0.1:5500
+      FRONTEND_API_URL: http://127.0.0.1:3000
+      E2E_ADMIN_EMAIL: admin@example.com
+      E2E_ADMIN_PASSWORD: ci-admin-password-long
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      # Switch to npm ci after generating and reviewing the first lockfile online.
+      - run: npm install
+      - run: npm run check
+      - run: npm test
+      - run: npm run test:integration
+      - run: python -m pip install -r ml/requirements.txt -r tests/requirements.txt
+      - run: npm run test:ml
+      - run: python -m playwright install --with-deps chromium
+      - run: npm run migrate && npm run build
+      - name: Browser tests with real services
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          npm start >artifacts/core.log 2>&1 &
+          python -m uvicorn ml.app:app --host 127.0.0.1 --port 8000 >artifacts/ml.log 2>&1 &
+          npm run serve:frontend >artifacts/frontend.log 2>&1 &
+          python scripts/wait-for-services.py
+          node scripts/create-ci-admin.js
+          python tests/e2e.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: verification-artifacts
+          path: |
+            artifacts/
+            package-lock.json

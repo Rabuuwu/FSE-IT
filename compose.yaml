@@ -1,0 +1,17 @@
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: fse
+      POSTGRES_PASSWORD: fse_local_only
+      POSTGRES_DB: fse
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - fse_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fse -d fse"]
+      interval: 5s
+      retries: 10
+volumes:
+  fse_db:

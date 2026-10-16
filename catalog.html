@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="same-origin">
+<title>FSE-IT — materiały do nauki</title>
+<link rel="stylesheet" href="css/catalog.css">
+<script src="config.js" defer></script><script src="utils.js" defer></script><script src="catalog.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#main">Przejdź do materiałów</a>
+<header><a class="brand" href="catalog.html">FSE-IT</a><span id="identity"></span><button id="logout" type="button">Wyloguj</button></header>
+<nav aria-label="Główna nawigacja"><a href="#main">Katalog</a><a href="#private">Prywatne zasoby</a><a id="usersLink" href="#users" hidden>Użytkownicy</a></nav>
+<main id="main">
+<div class="title-row"><div><h1>Twoja biblioteka IT</h1><p>Znajdź materiał i wybierz, czego nauczysz się dalej.</p></div><button id="create" hidden>Dodaj materiał</button></div>
+<p id="message" role="status" aria-live="polite"></p><button id="retry" hidden>Spróbuj ponownie</button>
+<section aria-labelledby="suggestionsTitle"><h2 id="suggestionsTitle">Polecane dla Ciebie</h2><p id="recommendationMode">Ładowanie propozycji…</p><div id="recommendations" class="suggestions"></div></section>
+<section aria-labelledby="catalogTitle"><h2 id="catalogTitle">Materiały</h2>
+<form id="filters" class="filters"><label>Szukaj<input id="search" name="q" type="search" maxlength="200" placeholder="Tytuł, temat lub autor"></label><label>Tag<select id="tag" name="tag"><option value="">Wszystkie tagi</option></select></label><label>Rodzaj<select id="type" name="type"><option value="">Wszystkie rodzaje</option><option value="link">Odnośnik</option><option value="pdf">PDF</option><option value="article">Artykuł</option><option value="course">Kurs</option></select></label><button>Szukaj</button></form>
+<p id="results" role="status">Ładowanie materiałów…</p><div id="materials"></div>
+<div class="pagination"><button id="previous">Poprzednia</button><span id="pageInfo"></span><button id="next">Następna</button></div></section>
+<section id="private" aria-labelledby="privateTitle"><h2 id="privateTitle">Prywatne zasoby</h2><p>Twoje wcześniej zapisane zasoby pozostają prywatne.</p><div id="privateItems">Ładowanie…</div></section>
+<section id="users" hidden aria-labelledby="usersTitle"><h2 id="usersTitle">Użytkownicy</h2><div id="userItems"></div></section>
+</main>
+<dialog id="viewer" aria-labelledby="viewerTitle"><button class="close" id="closeViewer" aria-label="Zamknij materiał">Zamknij</button><h2 id="viewerTitle"></h2><div id="viewerBody"></div><section id="ratingSection"><h3>Twoja ocena</h3><form id="ratingForm"><label>Ocena<select id="rating"><option value="1">1 — słaby</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5 — świetny</option></select></label><button>Zapisz ocenę</button><button id="removeRating" type="button">Usuń ocenę</button></form></section><p id="viewerMessage" role="status"></p></dialog>
+<dialog id="editor" aria-labelledby="editorTitle"><form id="editorForm"><h2 id="editorTitle">Dodaj materiał</h2>
+<label>Rodzaj<select id="editType"><option value="link">Odnośnik</option><option value="pdf">PDF</option><option value="article">Artykuł</option><option value="course">Kurs</option></select></label>
+<label>Tytuł<input id="editTitle" required maxlength="200"></label><label>Opis<textarea id="editDescription" maxlength="2000"></textarea></label><label>Autor materiału<input id="editAuthor" maxlength="200"></label><label>Tagi oddzielone przecinkami<input id="editTags" maxlength="820" placeholder="Python, Cloud"></label>
+<div id="urlField"><label>Adres HTTPS<input id="editUrl" type="url" maxlength="2048" placeholder="https://"></label></div>
+<div id="contentField" hidden><label>Treść artykułu (Markdown)<textarea id="editContent" rows="12" maxlength="200000"></textarea></label></div>
+<div id="stagesField" hidden><h3>Etapy kursu</h3><div id="stages"></div><button id="addStage" type="button">Dodaj etap</button></div>
+<label class="check"><input id="editPublished" type="checkbox"> Opublikuj w katalogu</label><p id="editorMessage" role="status"></p><div class="actions"><button id="saveMaterial">Zapisz materiał</button><button id="cancelEdit" type="button">Anuluj</button></div></form></dialog>
+</body></html>

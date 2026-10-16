@@ -27,3 +27,10 @@ Thumbs.db
 # Build output
 dist/
 build/
+
+# Local Python environments and verification artifacts
+.venv/
+__pycache__/
+*.pyc
+artifacts/
+backups/
