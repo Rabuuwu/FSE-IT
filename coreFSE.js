@@ -1,3 +1,4 @@
+import { schemaReady } from './server/readiness.js';
 import 'dotenv/config';
 import pool from './db.js';
 import express from 'express';
@@ -370,13 +371,11 @@ export function createApp(database = pool, env = process.env) {
     return app;
 }
 
-export async function start() {
-    const app = createApp();
-    await pool.query('SELECT 1 FROM schema_migrations WHERE version = $1', ['003_identity_indexes.sql']).then(result => {
-        if (!result.rowCount) throw new Error('Run npm run migrate before starting the API');
-    });
-    const server = app.listen(Number(process.env.PORT || 3000), () => console.log('FSE-IT API ready'));
-    const stop = () => server.close(() => pool.end().then(() => process.exit(0)));
+export async function start(database = pool, env = process.env) {
+    if (!await schemaReady(database)) throw new Error('Run npm run migrate before starting the API');
+    const app = createApp(database, env);
+    const server = app.listen(Number(env.PORT || 3000), () => console.log('FSE-IT API ready'));
+    const stop = () => server.close(() => database.end().then(() => process.exit(0)));
     process.on('SIGTERM', stop);
     process.on('SIGINT', stop);
     return server;

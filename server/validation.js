@@ -1,4 +1,11 @@
 export function invalid(message) { throw Object.assign(new Error(message), { status: 400 }); }
+export function trustProxyHops(value) {
+    if (value === undefined || value === '') return undefined;
+    if (typeof value !== 'string' || !/^(0|[1-9]\d*)$/.test(value)) invalid('TRUST_PROXY_HOPS must be a non-negative integer');
+    const hops = Number(value);
+    if (!Number.isSafeInteger(hops)) invalid('TRUST_PROXY_HOPS must be a non-negative integer');
+    return hops;
+}
 export function positiveId(value) {
     if (!/^[1-9]\d*$/.test(String(value)) || !Number.isSafeInteger(Number(value)) || Number(value) > 2147483647) invalid('Invalid identifier');
     return Number(value);
@@ -53,4 +60,8 @@ export function listInput(query) {
     const type = text(query.type, 'type', 20, false);
     if (type && !['link','pdf','article','course'].includes(type)) invalid('Invalid material type');
     return { page, limit, q, tag, type };
+}
+export function commentInput(body) {
+    if (!body || typeof body !== 'object' || Array.isArray(body)) invalid('Invalid comment');
+    return { body: text(body.body, 'comment', 2000) };
 }
