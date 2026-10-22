@@ -1,7 +1,7 @@
 import { transaction } from './transaction.js';
 import { timingSafeEqual } from 'node:crypto';
 import { requireAdmin } from '../auth.js';
-import { positiveId, materialInput, listInput, invalid } from './validation.js';
+import { positiveId, materialInput, listInput, commentInput, invalid } from './validation.js';
 
 const projection = `m.*,
   COALESCE((SELECT json_agg(t.name ORDER BY t.name) FROM material_tags mt JOIN tags t ON t.id=mt.tag_id WHERE mt.material_id=m.id),'[]') AS tags,
@@ -54,12 +54,45 @@ export function installCatalog(app, pool, auth, env) {
         const result = await pool.query(`SELECT DISTINCT t.name FROM tags t JOIN material_tags mt ON mt.tag_id=t.id JOIN materials m ON m.id=mt.material_id WHERE ${visible} ORDER BY t.name`, argsFor(req));
         res.json({ tags: result.rows.map(row => row.name) });
     });
+    app.get('/creators/:id', auth, async (req, res) => {
+        const id = positiveId(req.params.id);
+        const creator = await pool.query(`SELECT u.id,u.display_name,u.created_at,count(m.id)::integer AS material_count
+            FROM users u LEFT JOIN materials m ON m.created_by=u.id AND m.published
+            WHERE u.id=$1 GROUP BY u.id`, [id]);
+        if (!creator.rowCount) return res.status(404).json({ error: 'Creator not found' });
+        const materials = await pool.query(`SELECT m.id,m.type,m.title,m.description,m.author,m.created_by,m.created_at,
+            COALESCE((SELECT json_agg(t.name ORDER BY t.name) FROM material_tags mt JOIN tags t ON t.id=mt.tag_id WHERE mt.material_id=m.id),'[]') AS tags
+            FROM materials m WHERE m.created_by=$1 AND m.published ORDER BY m.created_at DESC,m.id DESC LIMIT 100`, [id]);
+        res.json({
+            creator: { id: creator.rows[0].id, display_name: creator.rows[0].display_name, created_at: creator.rows[0].created_at },
+            total: creator.rows[0].material_count,
+            items: materials.rows,
+        });
+    });
     app.get('/materials/:id', auth, async (req, res) => {
         const id = positiveId(req.params.id);
         const result = await pool.query(`SELECT ${projection}, (SELECT score FROM ratings WHERE material_id=m.id AND user_id=$1) AS my_rating FROM materials m WHERE ${visible} AND m.id=$3`, [...argsFor(req), id]);
         if (!result.rowCount) throw notFound();
         const stages = await pool.query('SELECT position,title,content FROM material_stages WHERE material_id=$1 ORDER BY position', [id]);
         res.json({ ...result.rows[0], stages: stages.rows });
+    });
+    app.get('/materials/:id/comments', auth, async (req, res) => {
+        const id = positiveId(req.params.id);
+        const material = await accessible(pool, req, id);
+        if (!material.published) throw notFound();
+        const result = await pool.query(`SELECT c.id,c.body,c.created_at,u.id AS user_id,coalesce(u.display_name,'Użytkownik') AS author
+            FROM material_comments c JOIN users u ON u.id=c.user_id
+            WHERE c.material_id=$1 ORDER BY c.created_at,c.id LIMIT 100`, [id]);
+        res.json({ items: result.rows });
+    });
+    app.post('/materials/:id/comments', auth, async (req, res) => {
+        const id = positiveId(req.params.id), input = commentInput(req.body);
+        const material = await accessible(pool, req, id);
+        if (!material.published) throw notFound();
+        const result = await pool.query(`INSERT INTO material_comments(material_id,user_id,body)
+            VALUES($1,$2,$3) RETURNING id,body,created_at`, [id,req.user.user_id,input.body]);
+        const author = await pool.query('SELECT id,coalesce(display_name,\'Użytkownik\') AS display_name FROM users WHERE id=$1',[req.user.user_id]);
+        res.status(201).json({ ...result.rows[0], user_id: author.rows[0].id, author: author.rows[0].display_name });
     });
     app.post('/materials', auth, requireAdmin, async (req, res) => {
         const input = materialInput(req.body);

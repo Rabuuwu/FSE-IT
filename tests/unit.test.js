@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
-import { validateCredentials, validateLogin, positiveId, materialInput, listInput } from '../server/validation.js';
+import { validateCredentials, validateLogin, positiveId, materialInput, listInput, trustProxyHops } from '../server/validation.js';
 import { transaction } from '../server/transaction.js';
 
 const material = { type:'link',title:'Python',description:'Learn Python',url:'https://example.com',tags:['Python','python'],published:true };
@@ -26,6 +26,14 @@ test('identifiers and pagination reject SQL fragments, negative and oversized va
     assert.deepEqual(listInput({}),{page:1,limit:20,q:'',tag:'',type:''});
     assert.throws(()=>listInput({limit:'101'}),{status:400});
     assert.throws(()=>listInput({type:'invalid'}),{status:400});
+});
+test('trusted proxy hop configuration accepts only explicit non-negative integers',()=>{
+    assert.equal(trustProxyHops(undefined),undefined);
+    assert.equal(trustProxyHops('0'),0);
+    assert.equal(trustProxyHops('2'),2);
+    for(const value of [' ', '-1', '1.5', '1e2', '01', 'true', '9007199254740992']) {
+        assert.throws(()=>trustProxyHops(value),{status:400});
+    }
 });
 test('Markdown escapes raw HTML, attributes, scripts and hostile links',()=>{
     const context=vm.createContext({URL});vm.runInContext(readFileSync(new URL('../utils.js',import.meta.url),'utf8'),context);
