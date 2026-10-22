@@ -5,7 +5,7 @@
   "main": "coreFSE.js",
   "scripts": {
     "start": "node coreFSE.js",
-    "test": "node --test tests/unit.test.js",
+    "test": "node --test tests/unit.test.js tests/security.test.js tests/api-boundaries.test.js",
     "test:integration": "node --test tests/integration.test.js",
     "migrate": "node scripts/migrate.js",
     "admin": "node scripts/admin.js",
@@ -14,7 +14,8 @@
     "maintenance": "node scripts/maintenance.js",
     "migration:report": "node scripts/migration-report.js",
     "build": "node scripts/build-frontend.js",
-    "check": "python3 scripts/check-syntax.py"
+    "check": "python3 scripts/check-syntax.py",
+    "test:restore": "node scripts/test-backup-restore.js"
   },
   "keywords": [],
   "author": "",

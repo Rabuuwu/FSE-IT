@@ -25,12 +25,13 @@ export function configureApp(app, env) {
         if (req.method === 'OPTIONS') return res.sendStatus(204);
         next();
     });
-    app.use(express.json({ limit: '2mb' }));
     const buckets = new Map();
     app.use((req, res, next) => {
         const now = Date.now();
         for (const [key, bucket] of buckets) if (bucket.until <= now) buckets.delete(key);
-        const auth = ['/login','/register'].includes(req.path);
+        // Express accepts case variants and one trailing slash by default.
+        // Match the same aliases so they cannot switch to the larger API budget.
+        const auth = /^\/(?:login|register)\/?$/i.test(req.path);
         const key = `${req.ip}:${auth ? 'auth' : 'api'}`;
         // Bound memory under a large number of different addresses.
         if (!buckets.has(key) && buckets.size >= 20000) return res.status(429).json({ error: 'Try again later' });
@@ -42,6 +43,8 @@ export function configureApp(app, env) {
         }
         next();
     });
+    // Reject exhausted budgets before parsing even malformed JSON bodies.
+    app.use(express.json({ limit: '2mb' }));
     app.use((req, res, next) => {
         try { for (const segment of req.path.split('/')) if (/^\d/.test(segment)) positiveId(segment); next(); }
         catch (err) { next(err); }

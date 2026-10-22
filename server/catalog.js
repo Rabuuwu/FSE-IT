@@ -1,3 +1,4 @@
+import { schemaReady } from './readiness.js';
 import { transaction } from './transaction.js';
 import { timingSafeEqual } from 'node:crypto';
 import { requireAdmin } from '../auth.js';
@@ -36,7 +37,7 @@ async function accessible(pool, req, id) {
 }
 export function installCatalog(app, pool, auth, env) {
     app.get('/ready', async (req, res) => {
-        try { const result = await pool.query("SELECT 1 FROM schema_migrations WHERE version='003_identity_indexes.sql'"); res.status(result.rowCount ? 200 : 503).json({ ready: !!result.rowCount }); }
+        try { const ready = await schemaReady(pool); res.status(ready ? 200 : 503).json({ ready }); }
         catch { res.status(503).json({ ready: false }); }
     });
     app.get('/materials', auth, async (req, res) => {

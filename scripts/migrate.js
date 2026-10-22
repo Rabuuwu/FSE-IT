@@ -1,7 +1,8 @@
-import pool from '../db.js';
 import { readdir, readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
-export async function migrate(database = pool) {
+export async function migrate(database) {
+    // Explicit test pools must not load production configuration or create a default pool.
+    if (!database) database = (await import('../db.js')).default;
     const client = await database.connect();
     try {
         await client.query("SELECT pg_advisory_lock(741002)");
@@ -19,5 +20,6 @@ export async function migrate(database = pool) {
     } finally { await client.query('SELECT pg_advisory_unlock(741002)'); client.release(); }
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-    migrate().catch(err => { console.error('Migration failed:', err.code || err.message); process.exitCode = 1; }).finally(() => pool.end());
+    const { default: pool } = await import('../db.js');
+    migrate(pool).catch(err => { console.error('Migration failed:', err.code || err.message); process.exitCode = 1; }).finally(() => pool.end());
 }
