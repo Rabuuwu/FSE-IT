@@ -1,0 +1,98 @@
+{
+  "user": {
+    "name": "circle-user-round",
+    "source": "https://svgicons.com/icon/113017/circle-user-round",
+    "collection": "Lucide",
+    "license": "ISC"
+  },
+  "dashboard": {
+    "name": "layout-dashboard",
+    "source": "https://svgicons.com/icon/113439/layout-dashboard",
+    "collection": "Lucide",
+    "license": "ISC"
+  },
+  "library": {
+    "name": "library-big",
+    "source": "https://svgicons.com/icon/113448/library-big",
+    "collection": "Lucide",
+    "license": "ISC"
+  },
+  "settings": {
+    "name": "settings-2",
+    "source": "https://svgicons.com/icon/113809/settings-2",
+    "collection": "Lucide",
+    "license": "ISC"
+  },
+  "key": {
+    "name": "key-round",
+    "source": "https://svgicons.com/icon/113418/key-round",
+    "collection": "Lucide",
+    "license": "ISC"
+  },
+  "trash": {
+    "name": "trash-2",
+    "source": "https://svgicons.com/icon/114026/trash-2",
+    "collection": "Lucide",
+    "license": "ISC"
+  },
+  "shield": {
+    "name": "shield-check",
+    "source": "https://svgicons.com/icon/113818/shield-check",
+    "collection": "Lucide",
+    "license": "ISC"
+  },
+  "logout": {
+    "name": "log-out",
+    "source": "https://svgicons.com/icon/113483/log-out",
+    "collection": "Lucide",
+    "license": "ISC"
+  },
+  "article": {
+    "name": "file-text",
+    "source": "https://svgicons.com/icon/113230/file-text",
+    "collection": "Lucide",
+    "license": "ISC"
+  },
+  "course": {
+    "name": "graduation-cap",
+    "source": "https://svgicons.com/icon/113344/graduation-cap",
+    "collection": "Lucide",
+    "license": "ISC"
+  },
+  "link": {
+    "name": "link-2",
+    "source": "https://svgicons.com/icon/113455/link-2",
+    "collection": "Lucide",
+    "license": "ISC"
+  },
+  "pdf": {
+    "name": "file-type",
+    "source": "https://svgicons.com/icon/113231/file-type",
+    "collection": "Lucide",
+    "license": "ISC"
+  },
+  "left": {
+    "name": "chevron-left",
+    "source": "https://svgicons.com/icon/112963/chevron-left",
+    "collection": "Lucide",
+    "license": "ISC"
+  },
+  "right": {
+    "name": "chevron-right",
+    "source": "https://svgicons.com/icon/112964/chevron-right",
+    "collection": "Lucide",
+    "license": "ISC"
+  },
+  "down": {
+    "name": "arrow-down",
+    "source": "https://svgicons.com/icon/112742/arrow-down",
+    "collection": "Lucide",
+    "license": "ISC"
+  },
+  "star": {
+    "name": "star",
+    "source": "https://svgicons.com/icon/113936/star",
+    "collection": "Lucide",
+    "license": "ISC"
+  }
+}

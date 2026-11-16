@@ -2,10 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
-import { validateCredentials, validateLogin, positiveId, materialInput, listInput } from '../server/validation.js';
+import { validateCredentials, validateLogin, positiveId, materialInput, listInput, trustProxyHops, reviewInput, revisionInput, statusInput } from '../server/validation.js';
 import { transaction } from '../server/transaction.js';
 
-const material = { type:'link',title:'Python',description:'Learn Python',url:'https://example.com',tags:['Python','python'],published:true };
+const material = { type:'link',title:'Python',description:'Learn Python',url:'https://example.com',tags:['Python','python'],published:false };
 test('credentials normalize email and reject bcrypt truncation and invalid types', () => {
     assert.equal(validateCredentials({email:' USER@Example.com ',password:'long-password'}).email,'user@example.com');
     for(const password of ['short',{},'ą'.repeat(37),'x'.repeat(73)]) assert.throws(()=>validateCredentials({email:'a@example.com',password}),{status:400});
@@ -16,7 +16,7 @@ test('credentials normalize email and reject bcrypt truncation and invalid types
 test('catalog validates types, publication, tags and unsafe URLs', () => {
     assert.deepEqual(materialInput(material).tags,['python']);
     for(const url of ['http://example.com','javascript:alert(1)','https://a:b@example.com']) assert.throws(()=>materialInput({...material,url}),{status:400});
-    for(const change of [{type:'unknown'},{published:'true'},{tags:'python'},{tags:['']},{title:''}]) assert.throws(()=>materialInput({...material,...change}),{status:400});
+    for(const change of [{published:true},{publication_status:'published'},{publication_status:'pending'},{type:'unknown'},{published:'true'},{tags:'python'},{tags:['']},{title:''}]) assert.throws(()=>materialInput({...material,...change}),{status:400});
     assert.throws(()=>materialInput({...material,type:'course',stages:[]}),{status:400});
     assert.equal(materialInput({...material,type:'course',stages:[{title:'First',content:'Text'}]}).stages.length,1);
 });
@@ -26,6 +26,14 @@ test('identifiers and pagination reject SQL fragments, negative and oversized va
     assert.deepEqual(listInput({}),{page:1,limit:20,q:'',tag:'',type:''});
     assert.throws(()=>listInput({limit:'101'}),{status:400});
     assert.throws(()=>listInput({type:'invalid'}),{status:400});
+});
+test('trusted proxy hop configuration accepts only explicit non-negative integers',()=>{
+    assert.equal(trustProxyHops(undefined),undefined);
+    assert.equal(trustProxyHops('0'),0);
+    assert.equal(trustProxyHops('2'),2);
+    for(const value of [' ', '-1', '1.5', '1e2', '01', 'true', '9007199254740992']) {
+        assert.throws(()=>trustProxyHops(value),{status:400});
+    }
 });
 test('Markdown escapes raw HTML, attributes, scripts and hostile links',()=>{
     const context=vm.createContext({URL});vm.runInContext(readFileSync(new URL('../utils.js',import.meta.url),'utf8'),context);
@@ -56,4 +64,15 @@ test('production DB connections enforce verified TLS even with unsafe connection
     assert.equal(config.max,3);
     assert.equal(buildPoolConfig({DATABASE_URL:'postgresql://user:password@localhost/db'}).ssl,undefined);
     assert.throws(()=>buildPoolConfig({PGPOOL_MAX:'-1'}),/PGPOOL_MAX/);
+});
+
+test('moderation validates review decisions, rejection reasons, revisions and status filters',()=>{
+    assert.deepEqual(reviewInput({revision:1,decision:'approve'}),{revision:1,decision:'approve',note:''});
+    assert.deepEqual(reviewInput({revision:2,decision:'reject',note:' Add references '}),{revision:2,decision:'reject',note:'Add references'});
+    for(const body of [null,{}, {revision:0},{revision:'1'},{revision:2147483648}]) assert.throws(()=>revisionInput(body),{status:400});
+    for(const body of [{revision:1,decision:'publish'},{revision:1,decision:'reject'},{revision:1,decision:'reject',note:' '},{revision:1,decision:'approve',note:'x'.repeat(2001)}]) assert.throws(()=>reviewInput(body),{status:400});
+    for(const status of ['private','pending','published','rejected']) assert.equal(statusInput(status),status);
+    assert.equal(statusInput(''),'');
+    assert.equal(statusInput(undefined,'pending'),'pending');
+    for(const status of [null,[], 'all', 'published OR true']) assert.throws(()=>statusInput(status),{status:400});
 });

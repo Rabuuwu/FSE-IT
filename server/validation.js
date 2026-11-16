@@ -1,4 +1,11 @@
 export function invalid(message) { throw Object.assign(new Error(message), { status: 400 }); }
+export function trustProxyHops(value) {
+    if (value === undefined || value === '') return undefined;
+    if (typeof value !== 'string' || !/^(0|[1-9]\d*)$/.test(value)) invalid('TRUST_PROXY_HOPS must be a non-negative integer');
+    const hops = Number(value);
+    if (!Number.isSafeInteger(hops)) invalid('TRUST_PROXY_HOPS must be a non-negative integer');
+    return hops;
+}
 export function positiveId(value) {
     if (!/^[1-9]\d*$/.test(String(value)) || !Number.isSafeInteger(Number(value)) || Number(value) > 2147483647) invalid('Invalid identifier');
     return Number(value);
@@ -28,7 +35,8 @@ export function materialInput(body) {
     const description = text(body.description, 'description', 2000, false);
     const author = text(body.author, 'author', 200, false);
     if (body.published !== undefined && typeof body.published !== 'boolean') invalid('Invalid publication status');
-    const published = body.published === true;
+    if (body.published === true || (body.publication_status !== undefined && body.publication_status !== 'private')) invalid('Publication requires administrator review');
+    const published = false;
     let url = null;
     if (['link', 'pdf'].includes(type)) {
         try { const parsed = new URL(text(body.url, 'url', 2048)); if (parsed.protocol !== 'https:' || parsed.username || parsed.password) invalid('Use an HTTPS URL without credentials'); url = parsed.href; }
@@ -53,4 +61,24 @@ export function listInput(query) {
     const type = text(query.type, 'type', 20, false);
     if (type && !['link','pdf','article','course'].includes(type)) invalid('Invalid material type');
     return { page, limit, q, tag, type };
+}
+export function commentInput(body) {
+    if (!body || typeof body !== 'object' || Array.isArray(body)) invalid('Invalid comment');
+    return { body: text(body.body, 'comment', 2000) };
+}
+
+export function revisionInput(body) {
+    if (!body || !Number.isSafeInteger(body.revision) || body.revision < 1 || body.revision > 2147483647) invalid('revision is required to protect concurrent edits');
+    return body.revision;
+}
+export function statusInput(value, fallback = '') {
+    if (value === undefined) return fallback;
+    if (typeof value !== 'string' || !['','private','pending','published','rejected'].includes(value)) invalid('Invalid publication status');
+    return value;
+}
+export function reviewInput(body) {
+    const revision = revisionInput(body);
+    if (!['approve','reject'].includes(body.decision)) invalid('Invalid review decision');
+    const note = text(body.note, 'review note', 2000, body.decision === 'reject');
+    return { revision, decision: body.decision, note };
 }

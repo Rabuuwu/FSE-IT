@@ -1,0 +1,33 @@
+{
+  "css_source": "https://fonts.googleapis.com/css2?family=Manrope:wght@500..800&family=Source+Sans+3:wght@400..700&display=swap",
+  "fonts": [
+    {
+      "family": "Manrope",
+      "subset": "latin-ext",
+      "source": "https://fonts.gstatic.com/s/manrope/v20/xn7gYHE41ni1AdIRggmxSvfedN62Zw.woff2",
+      "bytes": 15240,
+      "file": "manrope-latin-ext.woff2"
+    },
+    {
+      "family": "Manrope",
+      "subset": "latin",
+      "source": "https://fonts.gstatic.com/s/manrope/v20/xn7gYHE41ni1AdIRggexSvfedN4.woff2",
+      "bytes": 24576,
+      "file": "manrope-latin.woff2"
+    },
+    {
+      "family": "Source Sans 3",
+      "subset": "latin-ext",
+      "source": "https://fonts.gstatic.com/s/sourcesans3/v20/nwpStKy2OAdR1K-IwhWudF-R3wEaZejf5HdF8Q.woff2",
+      "bytes": 60048,
+      "file": "source-sans-3-latin-ext.woff2"
+    },
+    {
+      "family": "Source Sans 3",
+      "subset": "latin",
+      "source": "https://fonts.gstatic.com/s/sourcesans3/v20/nwpStKy2OAdR1K-IwhWudF-R3w8aZejf5Hc.woff2",
+      "bytes": 28804,
+      "file": "source-sans-3-latin.woff2"
+    }
+  ]
+}

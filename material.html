@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="same-origin">
+<title>Materiał — FSE-IT</title>
+<link rel="stylesheet" href="css/fonts.css"><link rel="stylesheet" href="css/catalog.css"><link rel="stylesheet" href="css/theme.css">
+<script src="config.js" defer></script><script src="utils.js" defer></script><script src="icons.js" defer></script><script src="account-menu.js" defer></script><script src="material.js" defer></script>
+</head>
+<body>
+<header class="site-header"><a class="brand" href="catalog.html"><span class="brand-mark" aria-hidden="true">F</span>FSE-IT</a><span id="identity" hidden></span><a class="back-link" href="catalog.html">Wróć do katalogu</a></header>
+<main class="detail-page">
+<a class="back-link" href="catalog.html">← Katalog materiałów</a>
+<article class="reading-surface" aria-labelledby="materialTitle">
+<p id="materialType" class="eyebrow"></p><h1 id="materialTitle">Ładowanie materiału…</h1>
+<p id="materialDescription" class="detail-description"></p><div id="materialContent" class="reading-content"></div>
+<div id="externalMaterial"></div>
+</article>
+<section id="feedback" class="feedback-section" aria-label="Oceny i komentarze" hidden>
+<section class="rating-panel" aria-labelledby="ratingTitle"><div><p class="eyebrow">TWOJA OPINIA</p><h2 id="ratingTitle">Oceń materiał</h2><p id="ratingSummary" class="muted"></p></div><div class="star-rating" id="ratingStars" role="group" aria-label="Oceń materiał od 1 do 5 gwiazdek"></div><p id="ratingMessage" class="feedback-message" role="status" aria-live="polite"></p></section>
+<section class="creator-panel" aria-labelledby="creatorTitle"><p class="eyebrow">TWÓRCA</p><h2 id="creatorTitle"><a id="creatorLink" href="creator.html">Twórca materiału</a></h2><p id="creatorNote" class="muted"></p></section>
+<section class="comments-panel" aria-labelledby="commentsTitle"><div class="section-heading"><div><p class="eyebrow">ROZMOWA</p><h2 id="commentsTitle">Komentarze</h2></div><p id="commentsCount" class="section-note"></p></div><p id="commentsStatus" class="muted" role="status" aria-live="polite"></p><div id="commentsList" class="comments-list"></div>
+<form id="commentForm" class="comment-form"><label for="commentBody">Dodaj komentarz<textarea id="commentBody" maxlength="2000" rows="4" required placeholder="Podziel się pytaniem lub tym, co było pomocne…"></textarea></label><div class="comment-actions"><span>Do 2000 znaków</span><button type="submit" id="sendComment">Dodaj komentarz</button></div></form></section>
+</section>
+<p id="pageMessage" class="error" role="status" aria-live="polite"></p>
+</main>
+</body>
+</html>

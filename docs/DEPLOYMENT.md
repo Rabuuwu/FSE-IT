@@ -1,6 +1,13 @@
 # Release, migration and recovery
 
-Status on 2026-10-16: local implementation and deployment assets prepared. No remote environment was changed. Actual provider accounts, database, domains and existing production data have not been inspected. Integration/E2E and restore rehearsal remain release gates.
+Historical status on 2026-10-16: local implementation and deployment assets prepared. No remote environment was changed. Actual provider accounts, database, domains and existing production data have not been inspected. Integration/E2E and restore rehearsal remain release gates.
+
+Current verification (2026-10-22): 10 PostgreSQL17 integration scenarios and the
+synthetic backup/restore rehearsal passed, including failed migration004 rollback/retry
+and corrupt-archive atomic failure followed by successful restore. See
+[the recorded evidence](career-engineering-audit.md). Real-stack browser E2E,
+provider-specific recovery and target deployment are still release gates; no remote
+environment has been changed.
 
 ## Provider feasibility
 
@@ -30,7 +37,7 @@ pg_restore --dbname="$RESTORE_DATABASE_URL" --no-owner --no-privileges backups/p
 
 `RESTORE_DATABASE_URL` must identify a separate empty database. Restrict backup permissions/storage; dumps include personal and authentication data. Never commit dumps. Verify counts, representative article bodies, course ordering, private JSON and test authentication on the restored copy before considering the backup usable.
 
-5. Run `npm run migrate` against the restored copy first, then `npm run migration:report`. Migrations 001 (baseline), 002 (catalogue copy), 003 (normalized email uniqueness and indexes) are serialized with a database advisory lock and applied transactionally once. The server refuses readiness without the final migration.
+5. Run `npm run migrate` against the restored copy first, then `npm run migration:report`. Migrations 001 (baseline), 002 (catalogue copy), 003 (normalized email uniqueness and indexes), 004 (display names and material comments) are serialized with a database advisory lock and applied transactionally once. The server refuses readiness without the final migration.
 6. Original `resources.data` stays private and intact. Original articles/courses and stages remain in legacy tables; catalogue records retain `legacy_type`/`legacy_id` and are drafts. Confirm counts, authors, full text and ordering. Review malformed private resource IDs separately. A case collision aborts migration 003 instead of merging identities; resolve on the copy before repeating any release procedure.
 7. Review drafts and explicitly decide publication. Migration does not publish them. Record the accepted data mapping and any remediation.
 

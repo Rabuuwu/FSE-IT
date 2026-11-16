@@ -1,14 +1,15 @@
+import { schemaReady } from './readiness.js';
 import { transaction } from './transaction.js';
 import { timingSafeEqual } from 'node:crypto';
-import { requireAdmin } from '../auth.js';
-import { positiveId, materialInput, listInput, invalid } from './validation.js';
+import { requireAdmin, createOptionalAuthMiddleware } from '../auth.js';
+import { positiveId, materialInput, listInput, commentInput, invalid, revisionInput, statusInput, reviewInput } from './validation.js';
 
 const projection = `m.*,
   COALESCE((SELECT json_agg(t.name ORDER BY t.name) FROM material_tags mt JOIN tags t ON t.id=mt.tag_id WHERE mt.material_id=m.id),'[]') AS tags,
   (SELECT round(avg(score),2) FROM ratings r WHERE r.material_id=m.id) AS average_rating,
   (SELECT count(*)::integer FROM ratings r WHERE r.material_id=m.id) AS rating_count`;
 const visible = '(m.published OR m.created_by=$1 OR $2::boolean)';
-const argsFor = req => [req.user.user_id, req.user.role === 'admin'];
+const argsFor = req => [req.user?.user_id ?? null, req.user?.role === 'admin'];
 const notFound = () => Object.assign(new Error('Material not found'), { status: 404 });
 
 async function writeRelations(client, id, input) {
@@ -35,14 +36,66 @@ async function accessible(pool, req, id) {
     return result.rows[0];
 }
 export function installCatalog(app, pool, auth, env) {
+    const optionalAuth = createOptionalAuthMiddleware(auth);
+    const conflict = () => Object.assign(new Error('Material changed or state is no longer valid. Reload before saving.'), { status: 409 });
+    async function owned(client, req, id, revision) {
+        const result = await client.query('SELECT id,created_by,revision,publication_status FROM materials WHERE id=$1 FOR UPDATE', [id]);
+        const row = result.rows[0];
+        if (!row || (row.created_by !== req.user.user_id && req.user.role !== 'admin')) throw notFound();
+        if (revision !== undefined && row.revision !== revision) throw conflict();
+        return row;
+    }
+    async function statusCounts(where = '', args = []) {
+        const result = await pool.query(`SELECT publication_status,count(*)::integer AS count FROM materials ${where} GROUP BY publication_status`, args);
+        return Object.fromEntries(['private','pending','published','rejected'].map(status => [status, result.rows.find(row => row.publication_status === status)?.count ?? 0]));
+    }
+    app.get('/materials/mine', auth, async (req, res) => {
+        const { page, limit } = listInput(req.query), status = statusInput(req.query.status);
+        const counts = await statusCounts('WHERE created_by=$1', [req.user.user_id]);
+        const result = await pool.query(`SELECT ${projection} FROM materials m WHERE m.created_by=$1 AND ($2='' OR m.publication_status=$2) ORDER BY m.updated_at DESC,m.id DESC LIMIT $3 OFFSET $4`, [req.user.user_id,status,limit,(page-1)*limit]);
+        res.json({ items: result.rows, total: status ? counts[status] : Object.values(counts).reduce((a,b)=>a+b,0), counts, page, limit });
+    });
+    app.get('/admin/materials', auth, requireAdmin, async (req, res) => {
+        const { page, limit } = listInput(req.query), status = statusInput(req.query.status, 'pending');
+        const counts = await statusCounts();
+        const result = await pool.query(`SELECT ${projection},u.display_name AS creator_name FROM materials m LEFT JOIN users u ON u.id=m.created_by WHERE ($1='' OR m.publication_status=$1) ORDER BY m.submitted_at ASC NULLS LAST,m.id ASC LIMIT $2 OFFSET $3`, [status,limit,(page-1)*limit]);
+        res.json({ items: result.rows, total: status ? counts[status] : Object.values(counts).reduce((a,b)=>a+b,0), counts, page, limit });
+    });
+    app.get('/admin/overview', auth, requireAdmin, async (req, res) => {
+        const counts = await statusCounts();
+        const users = await pool.query('SELECT count(*)::integer AS total FROM users');
+        res.json({ users: users.rows[0].total, total: Object.values(counts).reduce((a,b)=>a+b,0), ...counts });
+    });
+    app.post('/admin/materials/:id/review', auth, requireAdmin, async (req, res) => {
+        const id = positiveId(req.params.id), input = reviewInput(req.body);
+        const row = await transaction(pool, async client => {
+            const current = await owned(client, req, id, input.revision);
+            if (current.publication_status !== 'pending') throw conflict();
+            const result = await client.query(`UPDATE materials SET publication_status=$2,published=$3,review_note=$4,reviewed_at=clock_timestamp(),reviewed_by=$5,revision=revision+1,updated_at=clock_timestamp() WHERE id=$1 RETURNING id,revision,publication_status`, [id,input.decision==='approve'?'published':'rejected',input.decision==='approve',input.note || null,req.user.user_id]);
+            return result.rows[0];
+        });
+        res.json(row);
+    });
+    for (const action of ['submit','withdraw']) app.post(`/materials/:id/${action}`, auth, async (req, res) => {
+        const id = positiveId(req.params.id), revision = revisionInput(req.body);
+        const row = await transaction(pool, async client => {
+            const current = await owned(client,req,id,revision);
+            const allowed = action === 'submit' ? ['private','rejected'] : ['pending','published','rejected'];
+            if (!allowed.includes(current.publication_status)) throw conflict();
+            const result = await client.query(`UPDATE materials SET publication_status=$2,published=false,review_note=NULL,reviewed_at=NULL,reviewed_by=NULL,submitted_at=${action === 'submit' ? 'clock_timestamp()' : 'NULL'},revision=revision+1,updated_at=clock_timestamp() WHERE id=$1 RETURNING id,revision,publication_status`, [id,action==='submit'?'pending':'private']);
+            return result.rows[0];
+        });
+        res.json(row);
+    });
     app.get('/ready', async (req, res) => {
-        try { const result = await pool.query("SELECT 1 FROM schema_migrations WHERE version='003_identity_indexes.sql'"); res.status(result.rowCount ? 200 : 503).json({ ready: !!result.rowCount }); }
+        try { const ready = await schemaReady(pool); res.status(ready ? 200 : 503).json({ ready }); }
         catch { res.status(503).json({ ready: false }); }
     });
-    app.get('/materials', auth, async (req, res) => {
+    app.get('/materials', optionalAuth, async (req, res) => {
         const { page, limit, q, tag, type } = listInput(req.query);
+        if (req.query.scope !== undefined && !['all','published'].includes(req.query.scope)) invalid('Invalid catalogue scope');
         const args = [...argsFor(req), `%${q.replace(/[\\%_]/g, '\\$&')}%`, tag, type];
-        const where = `${visible} AND (m.title ILIKE $3 OR m.description ILIKE $3 OR m.author ILIKE $3)
+        const where = `${visible}${req.query.scope === 'published' ? ' AND m.published' : ''} AND (m.title ILIKE $3 OR m.description ILIKE $3 OR m.author ILIKE $3)
           AND ($4='' OR EXISTS(SELECT 1 FROM material_tags mt JOIN tags t ON t.id=mt.tag_id WHERE mt.material_id=m.id AND t.name=$4))
           AND ($5='' OR m.type=$5)`;
         const count = await pool.query(`SELECT count(*)::integer AS total FROM materials m WHERE ${where}`, args);
@@ -50,40 +103,75 @@ export function installCatalog(app, pool, auth, env) {
         // List responses omit bodies to keep large courses/articles out of catalogue requests.
         res.json({ items: result.rows.map(({ content, ...item }) => item), total: count.rows[0].total, page, limit });
     });
-    app.get('/tags', auth, async (req, res) => {
+    app.get('/tags', optionalAuth, async (req, res) => {
         const result = await pool.query(`SELECT DISTINCT t.name FROM tags t JOIN material_tags mt ON mt.tag_id=t.id JOIN materials m ON m.id=mt.material_id WHERE ${visible} ORDER BY t.name`, argsFor(req));
         res.json({ tags: result.rows.map(row => row.name) });
     });
-    app.get('/materials/:id', auth, async (req, res) => {
+    app.get('/creators/:id', optionalAuth, async (req, res) => {
+        const id = positiveId(req.params.id);
+        const creator = await pool.query(`SELECT u.id,u.display_name,u.created_at,count(m.id)::integer AS material_count
+            FROM users u LEFT JOIN materials m ON m.created_by=u.id AND m.published
+            WHERE u.id=$1 GROUP BY u.id`, [id]);
+        if (!creator.rowCount) return res.status(404).json({ error: 'Creator not found' });
+        const materials = await pool.query(`SELECT m.id,m.type,m.title,m.description,m.author,m.created_by,m.created_at,
+            COALESCE((SELECT json_agg(t.name ORDER BY t.name) FROM material_tags mt JOIN tags t ON t.id=mt.tag_id WHERE mt.material_id=m.id),'[]') AS tags
+            FROM materials m WHERE m.created_by=$1 AND m.published ORDER BY m.created_at DESC,m.id DESC LIMIT 100`, [id]);
+        res.json({
+            creator: { id: creator.rows[0].id, display_name: creator.rows[0].display_name, created_at: creator.rows[0].created_at },
+            total: creator.rows[0].material_count,
+            items: materials.rows,
+        });
+    });
+    app.get('/materials/:id', optionalAuth, async (req, res) => {
         const id = positiveId(req.params.id);
         const result = await pool.query(`SELECT ${projection}, (SELECT score FROM ratings WHERE material_id=m.id AND user_id=$1) AS my_rating FROM materials m WHERE ${visible} AND m.id=$3`, [...argsFor(req), id]);
         if (!result.rowCount) throw notFound();
         const stages = await pool.query('SELECT position,title,content FROM material_stages WHERE material_id=$1 ORDER BY position', [id]);
         res.json({ ...result.rows[0], stages: stages.rows });
     });
-    app.post('/materials', auth, requireAdmin, async (req, res) => {
+    app.get('/materials/:id/comments', optionalAuth, async (req, res) => {
+        const id = positiveId(req.params.id);
+        const material = await accessible(pool, req, id);
+        if (!material.published) throw notFound();
+        const result = await pool.query(`SELECT c.id,c.body,c.created_at,u.id AS user_id,coalesce(u.display_name,'Użytkownik') AS author
+            FROM material_comments c JOIN users u ON u.id=c.user_id
+            WHERE c.material_id=$1 ORDER BY c.created_at,c.id LIMIT 100`, [id]);
+        res.json({ items: result.rows });
+    });
+    app.post('/materials/:id/comments', auth, async (req, res) => {
+        const id = positiveId(req.params.id), input = commentInput(req.body);
+        const material = await accessible(pool, req, id);
+        if (!material.published) throw notFound();
+        const result = await pool.query(`INSERT INTO material_comments(material_id,user_id,body)
+            VALUES($1,$2,$3) RETURNING id,body,created_at`, [id,req.user.user_id,input.body]);
+        const author = await pool.query('SELECT id,coalesce(display_name,\'Użytkownik\') AS display_name FROM users WHERE id=$1',[req.user.user_id]);
+        res.status(201).json({ ...result.rows[0], user_id: author.rows[0].id, author: author.rows[0].display_name });
+    });
+    app.post('/materials', auth, async (req, res) => {
         const input = materialInput(req.body);
-        const id = await transaction(pool, async client => {
-            const result = await client.query(`INSERT INTO materials(created_by,type,title,description,author,url,content,published) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`, [req.user.user_id,input.type,input.title,input.description,input.author,input.url,input.content,input.published]);
+        const row = await transaction(pool, async client => {
+            const result = await client.query(`INSERT INTO materials(created_by,type,title,description,author,url,content,published,publication_status) VALUES ($1,$2,$3,$4,$5,$6,$7,false,'private') RETURNING id,revision,publication_status`, [req.user.user_id,input.type,input.title,input.description,input.author,input.url,input.content]);
             await writeRelations(client, result.rows[0].id, input);
-            return result.rows[0].id;
+            return result.rows[0];
         });
-        res.status(201).json({ id });
+        res.status(201).json(row);
     });
-    app.put('/materials/:id', auth, requireAdmin, async (req, res) => {
-        const id = positiveId(req.params.id), input = materialInput(req.body);
-        if (!Number.isInteger(req.body.revision) || req.body.revision < 1) invalid('revision is required to protect concurrent edits');
+    app.put('/materials/:id', auth, async (req, res) => {
+        const id = positiveId(req.params.id), input = materialInput(req.body), revision = revisionInput(req.body);
+        const row = await transaction(pool, async client => {
+            await owned(client,req,id,revision);
+            const result = await client.query(`UPDATE materials SET type=$2,title=$3,description=$4,author=$5,url=$6,content=$7,published=false,publication_status='private',review_note=NULL,submitted_at=NULL,reviewed_at=NULL,reviewed_by=NULL,updated_at=clock_timestamp(),revision=revision+1 WHERE id=$1 RETURNING id,revision,publication_status`, [id,input.type,input.title,input.description,input.author,input.url,input.content]);
+            await writeRelations(client,id,input);
+            return result.rows[0];
+        });
+        res.json(row);
+    });
+    app.delete('/materials/:id', auth, async (req, res) => {
+        const id = positiveId(req.params.id);
         await transaction(pool, async client => {
-            // Optimistic concurrency: a second editor cannot silently overwrite newer content.
-            const result = await client.query(`UPDATE materials SET type=$2,title=$3,description=$4,author=$5,url=$6,content=$7,published=$8,updated_at=clock_timestamp(),revision=revision+1 WHERE id=$1 AND revision=$9 RETURNING id`, [id,input.type,input.title,input.description,input.author,input.url,input.content,input.published,req.body.revision]);
-            if (!result.rowCount) throw Object.assign(new Error('Material changed or was deleted. Reload before saving.'), { status: 409 });
-            await writeRelations(client, id, input);
+            await owned(client,req,id);
+            await client.query('DELETE FROM materials WHERE id=$1', [id]);
         });
-        res.json({ id });
-    });
-    app.delete('/materials/:id', auth, requireAdmin, async (req, res) => {
-        const result = await pool.query('DELETE FROM materials WHERE id=$1 RETURNING id', [positiveId(req.params.id)]);
-        if (!result.rowCount) throw notFound();
         res.sendStatus(204);
     });
     app.post('/materials/:id/views', auth, async (req, res) => {

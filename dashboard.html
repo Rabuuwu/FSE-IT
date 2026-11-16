@@ -1,1 +1,22 @@
-<!doctype html><html lang="pl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>FSE-IT</title><script src="dashboard.js" defer></script></head><body><p><a href="catalog.html">Przejdź do biblioteki FSE-IT</a></p></body></html>
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mój pulpit — FSE-IT</title>
+<link rel="stylesheet" href="css/fonts.css"><link rel="stylesheet" href="css/catalog.css"><link rel="stylesheet" href="css/theme.css">
+<script src="config.js" defer></script><script src="utils.js" defer></script><script src="icons.js" defer></script><script src="account-menu.js" defer></script><script src="dashboard.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#main">Przejdź do pulpitu</a>
+<header class="site-header"><a class="brand" href="catalog.html"><span class="brand-mark" aria-hidden="true">F</span>FSE-IT</a><nav aria-label="Główna nawigacja"><a href="catalog.html">Katalog</a><a href="my-materials.html">Moje materiały</a><a id="adminLink" href="admin.html" hidden>Administracja</a></nav><span id="identity" hidden></span><button id="logout" type="button" hidden>Wyloguj</button></header>
+<main id="main" class="dashboard-page">
+<h1>Mój pulpit</h1><p id="pageMessage" role="status" aria-live="polite">Sprawdzanie konta…</p>
+<p id="loginRequired" hidden><a href="login.html">Zaloguj się, aby otworzyć swój pulpit</a></p>
+<div id="dashboardContent" hidden>
+<section class="dashboard-welcome" aria-labelledby="welcomeTitle"><div><h2 id="welcomeTitle">Twoje miejsce do nauki i tworzenia</h2><p>Sprawdź swoje materiały, wróć do pracy nad szkicem lub odkryj kolejny temat.</p></div><div class="actions"><a class="button" href="material-editor.html">Dodaj materiał</a><a href="my-materials.html">Zarządzaj materiałami</a></div></section>
+<section aria-labelledby="summaryTitle"><h2 id="summaryTitle">Twoje materiały</h2><p id="summaryMessage" role="status" aria-live="polite">Ładowanie podsumowania…</p><button id="summaryRetry" type="button" class="secondary" hidden>Wczytaj podsumowanie ponownie</button><dl class="dashboard-stats"><div><dt><a href="my-materials.html">Wszystkie</a></dt><dd id="countTotal">—</dd></div><div><dt><a href="my-materials.html?status=private">Prywatne</a></dt><dd id="countPrivate">—</dd></div><div><dt><a href="my-materials.html?status=pending">Oczekujące</a></dt><dd id="countPending">—</dd></div><div><dt><a href="my-materials.html?status=rejected">Do poprawy</a></dt><dd id="countRejected">—</dd></div><div><dt><a href="my-materials.html?status=published">Publiczne</a></dt><dd id="countPublished">—</dd></div></dl></section>
+<section aria-labelledby="recentTitle"><div class="section-heading"><h2 id="recentTitle">Ostatnio zmieniane</h2><a href="my-materials.html">Zobacz wszystkie</a></div><p id="recentMessage" role="status"></p><div id="recentMaterials" class="material-list"></div></section>
+<section aria-labelledby="suggestionsTitle"><div class="section-heading"><h2 id="suggestionsTitle">Propozycje do nauki</h2><a href="catalog.html">Przejdź do katalogu</a></div><p id="recommendationMessage" role="status" aria-live="polite">Ładowanie propozycji…</p><button id="recommendationRetry" type="button" class="secondary" hidden>Wczytaj propozycje ponownie</button><div id="recommendations" class="material-list"></div></section>
+</div>
+</main>
+</body></html>

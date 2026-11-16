@@ -1,0 +1,43 @@
+/* Shared typography and contrast palette. Font licenses: assets/fonts/. */
+:root{
+ --font-heading:'Manrope','Segoe UI',sans-serif;
+ --font-body:'Source Sans 3','Segoe UI',sans-serif;
+ --ink:#18334b;--blue:#155e8a;--teal:#0b665f;--paper:#f4f7f8;--surface:#ffffff;
+ --muted:#435d70;--control-border:#637789;--error:#a31d29;
+ --primary:var(--ink);--secondary:var(--blue);--success:#186344;--danger:var(--error);
+ --text-dark:var(--ink);--text-light:var(--muted);--border:var(--control-border);
+ font-family:var(--font-body);font-synthesis:none;
+}
+body{font-family:var(--font-body);font-size:1.0625rem;line-height:1.65;color:var(--ink)}
+h1,h2,h3,h4,h5,h6,.brand,.dashboard-stats dd,.admin-overview dd{font-family:var(--font-heading);font-weight:700;font-synthesis:none}
+h1,.learning-hero h1,.editor-page h1{letter-spacing:-.035em;line-height:1.16}
+h2,h3{letter-spacing:-.02em;line-height:1.3}
+p,li,dd{overflow-wrap:anywhere}
+button,input,select,textarea,.btn{font-family:var(--font-body)}
+button,input,select,textarea{font-size:1rem}
+input,select,textarea{color:var(--ink);border-color:var(--control-border);background:var(--surface)}
+input::placeholder,textarea::placeholder{color:#506477;opacity:1}
+.meta,.muted,.section-note,.account-label,.material-description,.material-byline,
+.material-byline .creator-link,.material-list .material-rating{color:var(--muted)}
+.material-list .material-tags .tag{color:#365260;background:#eff4f5}
+input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-visible,a:focus-visible,
+.suggestions:focus-visible,summary:focus-visible{
+ outline:3px solid var(--teal);outline-offset:3px;box-shadow:0 0 0 3px white;
+}
+.btn{background:var(--blue);color:white}
+.btn:hover,.btn:focus-visible{background:#10486b}
+.btn.secondary{background:var(--success)}
+.btn.secondary:hover{background:#104e29}
+.links a,.back-link{color:var(--blue)}
+.error{color:var(--error)}.success{color:var(--success)}
+.links a,main p a,.creator-link,.material-open,.account-tabs a{text-decoration:underline;text-underline-offset:3px}
+.site-header .account-toggle{border-color:var(--teal);color:var(--teal)}
+button.secondary,.pagination button,.rail-control{border-color:var(--control-border)}
+.star-button{color:#526a7a;min-width:44px;min-height:44px}
+.star-button:hover:not(:disabled),.star-button.selected{color:#8a4b00}
+.account-page form p{color:var(--muted)}
+.reading-content p,.course-stage p{max-width:72ch;line-height:1.75}
+/* Keep tag backgrounds clear of adjacent lines and small labels readable. */
+.material-list .material-tags,.suggestions .material-tags{line-height:1.8}
+.tag,.material-list .material-tags .tag,.suggestions .material-tags .tag{font-size:.8125rem;line-height:1.5;padding:.1rem .45rem;margin:.12rem .25rem .12rem 0;vertical-align:middle}
+.filters input,.filters select,.filter-actions .secondary{border-color:var(--control-border)}
