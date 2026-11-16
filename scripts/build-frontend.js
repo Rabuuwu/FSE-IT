@@ -1,8 +1,9 @@
 import { cp, mkdir, readFile, writeFile } from 'node:fs/promises';
-const files=['index.html','login.html','register.html','catalog.html','catalog.js','utils.js','config.js','dashboard.html','dashboard.js','admin.html','admin.js','article-creator.html','article-creator.js','article-viewer.html','article-viewer.js'];
+const files=['index.html','login.html','register.html','catalog.html','catalog.js','my-materials.html','my-materials.js','creator.html','creator.js','material.html','material.js','material-editor.html','material-editor.js','utils.js','icons.js','account-menu.js','account.html','account.js','config.js','dashboard.html','dashboard.js','admin.html','admin.js','article-creator.html','article-creator.js','article-viewer.html','article-viewer.js'];
 await mkdir('dist',{recursive:true});
 for(const file of files) await cp(file,`dist/${file}`);
 await cp('css','dist/css',{recursive:true});
+await cp('assets','dist/assets',{recursive:true});
 const configured=process.env.FRONTEND_API_URL;
 if(configured){
     const url=new URL(configured);

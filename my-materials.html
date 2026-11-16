@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Moje materiały — FSE-IT</title>
+<link rel="stylesheet" href="css/fonts.css"><link rel="stylesheet" href="css/catalog.css"><link rel="stylesheet" href="css/theme.css">
+<script src="config.js" defer></script><script src="utils.js" defer></script><script src="icons.js" defer></script><script src="account-menu.js" defer></script><script src="my-materials.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#main">Przejdź do moich materiałów</a>
+<header class="site-header"><a class="brand" href="catalog.html"><span class="brand-mark" aria-hidden="true">F</span>FSE-IT</a><nav aria-label="Główna nawigacja"><a href="catalog.html">Katalog</a><a href="my-materials.html" aria-current="page">Moje materiały</a><a id="adminLink" href="admin.html" hidden>Administracja</a></nav><span id="identity" hidden></span><button id="logout" type="button" hidden>Wyloguj</button></header>
+<main id="main" class="my-materials-page">
+<div class="title-row"><div><h1>Moje materiały</h1><p>Wszystko, co dodajesz i zapisujesz, w jednym miejscu.</p></div><a id="create" class="button" href="material-editor.html" hidden>Dodaj materiał</a></div>
+<p id="pageMessage" role="status" aria-live="polite"></p>
+<p id="loginRequired" hidden><a href="login.html">Zaloguj się, aby zobaczyć swoje materiały</a></p>
+<section id="mine" aria-label="Twoje materiały" hidden>
+<p>Nowe materiały są prywatne. Aby je opublikować, przekaż je do weryfikacji administratorowi.</p>
+<label for="mineStatus">Stan materiału</label><select id="mineStatus"><option value="">Wszystkie stany</option><option value="private">Prywatne</option><option value="pending">Oczekujące</option><option value="rejected">Do poprawy</option><option value="published">Publiczne</option></select>
+<p id="mineMessage" role="status" aria-live="polite"></p><button id="retry" type="button" class="secondary" hidden>Spróbuj ponownie</button>
+<div id="mineItems" class="material-list"></div>
+<div id="pagination" class="pagination"><button id="previous" type="button">Poprzednia</button><span id="pageInfo"></span><button id="next" type="button">Następna</button></div>
+</section>
+</main>
+</body></html>

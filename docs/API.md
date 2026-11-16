@@ -14,18 +14,39 @@ Base URL: configured by `FRONTEND_API_URL` at frontend build time. JSON requests
 
 Admin promotion is an explicit administrative command: `npm run admin -- email`. There is no public promotion endpoint. Tokens use HS256, expire after `JWT_EXPIRES_IN`, and cannot retain revoked roles.
 
-## Shared catalogue
+## Own account
+
+All account routes require a current authenticated session and select the account exclusively from that session. Client-supplied IDs, roles and unknown fields are rejected.
+
+| Route | Body | Result |
+| --- | --- | --- |
+| `GET /account` | — | `{user:{user_id,email,display_name,role}}`, without password/session internals. |
+| `PATCH /account` | `{display_name?,email?,current_password?}` | Updated public account fields. Names up to80characters; empty clears the name. Email normalized and unique; changing it requires current password. |
+| `PUT /account/password` | `{current_password,new_password}` | Requires a different valid password (10+characters, at most72UTF-8bytes). Revokes every session including caller; sign in again. |
+| `DELETE /account` | `{current_password,confirmation:"USUŃ KONTO"}` | 204. Deletes own unpublished materials and account, cascades private resources/activity/comments; published material remains without account association. Public author/content text is retained. Last administrator409. |
+
+Missing/invalid input400; incorrect current password403; conflicting email or last administrator409; expired/revoked session401. Sensitive writes share20/minute authentication budget. Transactions lock the current account and revalidate session/password before mutation. Migration006 and JWT session version prevent old tokens from authorizing actions after a password change. Legacy tokens without the claim represent version0 until rotation. Readiness/startup require006. There is no public endpoint for changing another account or assigning roles. Email verification and recovery are not supplied by these endpoints.
+
+## Shared catalogue and moderation
 
 | Route | Access | Behavior |
 | --- | --- | --- |
-| `GET /materials?q=&tag=&type=&page=1&limit=20` | Signed in | `{items,total,page,limit}`. Keyword search matches title/description/author. Exact normalized tag; type link/pdf/article/course. Limit 1–100; stable newest-first ordering. Bodies omitted from list. |
-| `GET /tags` | Signed in | `{tags:[name,...]}` for visible materials only. |
-| `GET /materials/:id` | Signed in, visible record | Material with body, stages and `my_rating`. |
-| `POST /materials` | Admin | Create atomically with tags/stages; 201 `{id}`. |
-| `PUT /materials/:id` | Admin | Full replacement, requires current integer `revision`; 200 `{id}`. Concurrent edits fail with 409. Reload deliberately before retrying. |
-| `DELETE /materials/:id` | Admin | 204; stages, tag assignments, ratings and views cascade. |
+| `GET /materials?q=&tag=&type=&page=1&limit=20&scope=published` | Public | `{items,total,page,limit}`. Public scope excludes drafts even for their owners; default `scope=all` also includes the signed-in owner's drafts/admin previews. Anonymous reads always exclude unpublished records. Bodies omitted. |
+| `GET /tags` | Public | Tags belonging to visible materials only. |
+| `GET /materials/:id` | Public or owner/admin preview | Body, stages and `my_rating`; inaccessible record returns 404. |
+| `GET /materials/:id/comments` | Public, published record | First 100 comments; writing requires authentication. |
+| `GET /creators/:id` | Public | Public display name and published materials, without email/password. |
+| `POST /materials` | Signed in | Create private, atomically with tags/stages; 201 `{id,revision,publication_status}`. |
+| `PUT /materials/:id` | Owner/admin | Full replacement with current integer `revision`; always becomes private and clears review metadata. |
+| `DELETE /materials/:id` | Owner/admin | 204; relations cascade. |
+| `GET /materials/mine?status=&page=1` | Signed in | Own records, status counts and pagination. Empty status means all. |
+| `POST /materials/:id/submit` | Owner/admin | `{revision}`; private/rejected → pending. |
+| `POST /materials/:id/withdraw` | Owner/admin | `{revision}`; pending/published/rejected → private. |
+| `GET /admin/overview` | Admin | User count, material count and counts per publication state. |
+| `GET /admin/materials?status=pending&page=1` | Admin | Moderation queue; empty status means all records. |
+| `POST /admin/materials/:id/review` | Admin | `{revision,decision:"approve"|"reject",note}`; pending → published/rejected. Rejection requires a nonempty note, up to 2000 characters. |
 
-Visibility: published records are visible to all signed-in users. Admin sees drafts; the original creator may read their own draft. Drafts are excluded from other users' lists, tag lists, details, activity training and recommendations. Old content is migrated as drafts.
+Missing authentication returns 401 and insufficient admin role 403. Non-owner draft access/mutation returns 404. Stale revisions and invalid state transitions return 409. Existing-row content/state mutations lock the material row in a transaction; clients must reload before resolving conflicts. Approving twice cannot apply two decisions. Editing a public material immediately removes it from the public catalogue until it is submitted and approved again.
 
 Write body:
 
@@ -36,14 +57,15 @@ Write body:
   "description": "A practical introduction",
   "author": "Material author",
   "tags": ["python", "backend"],
-  "published": true,
   "content": "# Introduction\nStart here.",
   "stages": [],
   "revision": 1
 }
 ```
 
-`revision` is needed only on update; `url` is required for link/pdf (HTTPS, no URL credentials); `content` is required for article; course requires 1–100 stages `{title,content}`. Titles ≤200, descriptions ≤2000, author ≤200, content per article/stage ≤200000 characters. Maximum 20 tags, each ≤40 characters; trim, lowercase, deduplicate. Imported historical titles retain original lengths. Request size is capped at 2 MB. Raw HTML is displayed as text; the renderer supports headings, bold, inline and fenced code, and paragraphs.
+`revision` is required on update, not creation. `published:true` or a non-private `publication_status` in a write payload is rejected, including for administrators. Publication requires a separate moderation decision. `url` is required for link/pdf (HTTPS without credentials); article requires content; course requires 1–100 `{title,content}` stages. Limits: title/author 200, description 2000, article/stage content 200000 characters; up to 20 tags of 40 characters. Tags are normalized, deduplicated and sorted. Total JSON request limit: 2 MB. Raw HTML is escaped by the renderer.
+
+Migration 005 preserves previous publication choices. A separate explicitly authorized local operation published the 56 existing development materials after backup. Generic migration never makes private records public. New material creation always starts private.
 
 ## Activity and recommendations
 

@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FSE-IT - Login</title>
-    <link rel="stylesheet" href="css/login.css">
+    <link rel="stylesheet" href="css/fonts.css"><link rel="stylesheet" href="css/login.css"><link rel="stylesheet" href="css/theme.css">
     <script src="config.js"></script>
     <script src="utils.js"></script>
 </head>
@@ -31,13 +31,15 @@
     </div>
 
     <script>
+    const noticeParams=new URLSearchParams(location.search);
+    if(noticeParams.get('changed')==='password'||noticeParams.get('deleted')==='1'){const notice=document.getElementById('success');notice.textContent=noticeParams.get('deleted')==='1'?'Konto zostało usunięte.':'Hasło zmienione. Zaloguj się ponownie.';notice.style.display='block';}
     document.getElementById('loginForm').addEventListener('submit', async event => {
         event.preventDefault();
         const button=document.getElementById('submitBtn'), error=document.getElementById('error');
         button.disabled=true;error.style.display='none';
         try {
             const data=await api('/login',{method:'POST',body:JSON.stringify({email:document.getElementById('email').value,password:document.getElementById('password').value})});
-            localStorage.setItem('token',data.token);location.assign('catalog.html');
+            localStorage.setItem('token',data.token);location.assign('dashboard.html');
         } catch(err) { error.textContent=err.message;error.style.display='block'; }
         finally { button.disabled=false; }
     });

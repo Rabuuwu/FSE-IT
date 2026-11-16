@@ -1,3 +1,4 @@
+import { schemaReady } from './server/readiness.js';
 import 'dotenv/config';
 import pool from './db.js';
 import express from 'express';
@@ -6,6 +7,8 @@ import jwt from 'jsonwebtoken';
 
 import { createAuthMiddleware } from './auth.js';
 import { configureApp } from './server/security.js';
+import { transaction } from './server/transaction.js';
+import { installAccount } from './server/account.js';
 import { installCatalog } from './server/catalog.js';
 import { validateLogin, validateCredentials } from './server/validation.js';
 import { pathToFileURL } from 'node:url';
@@ -18,6 +21,7 @@ export function createApp(database = pool, env = process.env) {
     const SALT_ROUNDS = Number(env.BCRYPT_SALT_ROUNDS || 12);
     configureApp(app, env);
     installCatalog(app, pool, authMiddleware, env);
+    installAccount(app, pool, authMiddleware, env);
     app.use(['/articles', '/courses'], (req, res, next) => {
         if (['POST', 'PUT', 'DELETE'].includes(req.method)) return res.status(410).json({ error: 'Use the shared /materials API for content changes' });
         next();
@@ -82,7 +86,7 @@ export function createApp(database = pool, env = process.env) {
             }
 
             const result = await pool.query(`
-                SELECT u.id, u.password_hash, u.role_id, r.name as role_name
+                SELECT u.id, u.password_hash, u.role_id, u.session_version, r.name as role_name
                 FROM users u
                 LEFT JOIN roles r ON u.role_id = r.id
                 WHERE lower(u.email) = $1
@@ -97,7 +101,7 @@ export function createApp(database = pool, env = process.env) {
                 return res.status(401).json({ error: 'Invalid email or password' });
             }
 
-            const payload = { user_id: user.id, role_id: user.role_id, role: user.role_name || 'user' };
+            const payload = { user_id: user.id, role_id: user.role_id, role: user.role_name || 'user', session_version: user.session_version ?? 0 };
             const secret = env.JWT_SECRET;
 
             const token = jwt.sign(payload, secret, { expiresIn: env.JWT_EXPIRES_IN || '1h' });
@@ -221,7 +225,16 @@ export function createApp(database = pool, env = process.env) {
             // Delete user's resources first (CASCADE should handle this, but explicit for safety)
 
             // Delete user
-            const result = await pool.query('DELETE FROM users WHERE id = $1 RETURNING id', [userId]);
+            const result = await transaction(pool, async client => {
+                // Share the self-deletion lock so concurrent admin operations cannot remove the last administrator.
+                await client.query("SELECT id FROM roles WHERE name='admin' FOR UPDATE");
+                const target = await client.query('SELECT u.id,r.name AS role FROM users u JOIN roles r ON r.id=u.role_id WHERE u.id=$1 FOR UPDATE OF u', [userId]);
+                if (target.rows[0]?.role === 'admin') {
+                    const admins = await client.query("SELECT count(*)::integer AS total FROM users u JOIN roles r ON r.id=u.role_id WHERE r.name='admin'");
+                    if (admins.rows[0].total <= 1) throw Object.assign(new Error('Cannot delete the last administrator'), { status: 409 });
+                }
+                return client.query('DELETE FROM users WHERE id = $1 RETURNING id', [userId]);
+            });
 
             if (result.rows.length === 0) {
                 return res.status(404).json({ error: 'User not found' });
@@ -370,13 +383,11 @@ export function createApp(database = pool, env = process.env) {
     return app;
 }
 
-export async function start() {
-    const app = createApp();
-    await pool.query('SELECT 1 FROM schema_migrations WHERE version = $1', ['003_identity_indexes.sql']).then(result => {
-        if (!result.rowCount) throw new Error('Run npm run migrate before starting the API');
-    });
-    const server = app.listen(Number(process.env.PORT || 3000), () => console.log('FSE-IT API ready'));
-    const stop = () => server.close(() => pool.end().then(() => process.exit(0)));
+export async function start(database = pool, env = process.env) {
+    if (!await schemaReady(database)) throw new Error('Run npm run migrate before starting the API');
+    const app = createApp(database, env);
+    const server = app.listen(Number(env.PORT || 3000), () => console.log('FSE-IT API ready'));
+    const stop = () => server.close(() => database.end().then(() => process.exit(0)));
     process.on('SIGTERM', stop);
     process.on('SIGINT', stop);
     return server;
