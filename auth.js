@@ -1,3 +1,4 @@
+import { digestToken } from './server/recovery.js';
 import jwt from 'jsonwebtoken';
 
 export function createAuthMiddleware(pool, env = process.env) {
@@ -14,6 +15,10 @@ export function createAuthMiddleware(pool, env = process.env) {
             if (!result.rowCount) return res.status(401).json({ error: 'Account no longer exists' });
             const version = payload.session_version === undefined ? 0 : payload.session_version;
             if (!Number.isSafeInteger(version) || version < 0 || version !== (result.rows[0].session_version ?? 0)) return res.status(401).json({ error: 'Session expired. Sign in again' });
+            const digest = digestToken(header.slice(7));
+            if ((await pool.query('SELECT 1 FROM revoked_tokens WHERE digest=$1 AND expires_at>now()', [digest])).rowCount) return res.status(401).json({ error: 'Session revoked' });
+            req.tokenDigest = digest;
+            req.tokenExpiry = payload.exp;
             req.sessionVersion = version;
             req.user = { user_id: result.rows[0].id, email: result.rows[0].email, role: result.rows[0].role };
             next();

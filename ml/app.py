@@ -38,4 +38,4 @@ async def recommendations(user_id: int, authorization: str = Header(default=""))
     if not 0 < user_id <= 2147483647:
         raise HTTPException(400, "Invalid identifier")
     data = await asyncio.to_thread(dataset, user_id, token)
-    return await asyncio.to_thread(recommend, data["materials"], data["activity"])
+    return await asyncio.to_thread(recommend, data["materials"], data["activity"], interests=data.get("interests", []))

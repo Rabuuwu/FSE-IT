@@ -49,7 +49,7 @@ async function init(){
  if(!hasAuthToken()){$('loginRequired').hidden=false;return;}
  try{
   const {user}=await api('/me');setAccountUser(user);$('adminLink').hidden=user.role!=='admin';$('mine').hidden=$('create').hidden=$('logout').hidden=false;
-  $('logout').onclick=()=>{removeAuthToken();location.assign('login.html');};
+  $('logout').onclick=()=>logoutAccount();
   $('mineStatus').onchange=()=>{page=1;load();};$('previous').onclick=()=>{page--;load();};$('next').onclick=()=>{page++;load();};$('retry').onclick=load;
   const status=new URLSearchParams(location.search).get('status');if(Object.hasOwn(statuses,status))$('mineStatus').value=status;
   await load();

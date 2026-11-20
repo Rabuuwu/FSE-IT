@@ -1,3 +1,5 @@
+import { installRevisions } from './revisions.js';
+import { metadataInput } from './learning-validation.js';
 import { schemaReady } from './readiness.js';
 import { transaction } from './transaction.js';
 import { timingSafeEqual } from 'node:crypto';
@@ -36,6 +38,7 @@ async function accessible(pool, req, id) {
     return result.rows[0];
 }
 export function installCatalog(app, pool, auth, env) {
+    installRevisions(app,pool,auth,writeRelations);
     const optionalAuth = createOptionalAuthMiddleware(auth);
     const conflict = () => Object.assign(new Error('Material changed or state is no longer valid. Reload before saving.'), { status: 409 });
     async function owned(client, req, id, revision) {
@@ -72,6 +75,8 @@ export function installCatalog(app, pool, auth, env) {
             const current = await owned(client, req, id, input.revision);
             if (current.publication_status !== 'pending') throw conflict();
             const result = await client.query(`UPDATE materials SET publication_status=$2,published=$3,review_note=$4,reviewed_at=clock_timestamp(),reviewed_by=$5,revision=revision+1,updated_at=clock_timestamp() WHERE id=$1 RETURNING id,revision,publication_status`, [id,input.decision==='approve'?'published':'rejected',input.decision==='approve',input.note || null,req.user.user_id]);
+            await client.query('INSERT INTO moderation_events(material_id,actor_id,action,note) VALUES($1,$2,$3,$4)', [id,req.user.user_id,input.decision,input.note || '']);
+            if(current.created_by) await client.query('INSERT INTO notifications(user_id,material_id,message) VALUES($1,$2,$3)',[current.created_by,id,input.decision==='approve'?'Materiał został opublikowany.':`Materiał wymaga poprawy: ${input.note}`]);
             return result.rows[0];
         });
         res.json(row);
@@ -83,6 +88,7 @@ export function installCatalog(app, pool, auth, env) {
             const allowed = action === 'submit' ? ['private','rejected'] : ['pending','published','rejected'];
             if (!allowed.includes(current.publication_status)) throw conflict();
             const result = await client.query(`UPDATE materials SET publication_status=$2,published=false,review_note=NULL,reviewed_at=NULL,reviewed_by=NULL,submitted_at=${action === 'submit' ? 'clock_timestamp()' : 'NULL'},revision=revision+1,updated_at=clock_timestamp() WHERE id=$1 RETURNING id,revision,publication_status`, [id,action==='submit'?'pending':'private']);
+            await client.query('INSERT INTO moderation_events(material_id,actor_id,action) VALUES($1,$2,$3)',[id,req.user.user_id,action]);
             return result.rows[0];
         });
         res.json(row);
@@ -93,13 +99,16 @@ export function installCatalog(app, pool, auth, env) {
     });
     app.get('/materials', optionalAuth, async (req, res) => {
         const { page, limit, q, tag, type } = listInput(req.query);
+        const sort = req.query.sort || "newest";
+        const sorts = {newest:"m.created_at DESC,m.id DESC",rating:"average_rating DESC NULLS LAST,rating_count DESC,m.id DESC",relevance:"(m.title ILIKE $3) DESC,m.created_at DESC,m.id DESC"};
+        if(!Object.hasOwn(sorts,sort)) invalid("Invalid sort");
         if (req.query.scope !== undefined && !['all','published'].includes(req.query.scope)) invalid('Invalid catalogue scope');
         const args = [...argsFor(req), `%${q.replace(/[\\%_]/g, '\\$&')}%`, tag, type];
         const where = `${visible}${req.query.scope === 'published' ? ' AND m.published' : ''} AND (m.title ILIKE $3 OR m.description ILIKE $3 OR m.author ILIKE $3)
           AND ($4='' OR EXISTS(SELECT 1 FROM material_tags mt JOIN tags t ON t.id=mt.tag_id WHERE mt.material_id=m.id AND t.name=$4))
           AND ($5='' OR m.type=$5)`;
         const count = await pool.query(`SELECT count(*)::integer AS total FROM materials m WHERE ${where}`, args);
-        const result = await pool.query(`SELECT ${projection} FROM materials m WHERE ${where} ORDER BY m.created_at DESC,m.id DESC LIMIT $6 OFFSET $7`, [...args, limit, (page-1)*limit]);
+        const result = await pool.query(`SELECT ${projection} FROM materials m WHERE ${where} ORDER BY ${sorts[sort]} LIMIT $6 OFFSET $7`, [...args, limit, (page-1)*limit]);
         // List responses omit bodies to keep large courses/articles out of catalogue requests.
         res.json({ items: result.rows.map(({ content, ...item }) => item), total: count.rows[0].total, page, limit });
     });
@@ -108,17 +117,17 @@ export function installCatalog(app, pool, auth, env) {
         res.json({ tags: result.rows.map(row => row.name) });
     });
     app.get('/creators/:id', optionalAuth, async (req, res) => {
-        const id = positiveId(req.params.id);
+        const id = positiveId(req.params.id), {page,limit}=listInput(req.query);
         const creator = await pool.query(`SELECT u.id,u.display_name,u.created_at,count(m.id)::integer AS material_count
             FROM users u LEFT JOIN materials m ON m.created_by=u.id AND m.published
             WHERE u.id=$1 GROUP BY u.id`, [id]);
         if (!creator.rowCount) return res.status(404).json({ error: 'Creator not found' });
         const materials = await pool.query(`SELECT m.id,m.type,m.title,m.description,m.author,m.created_by,m.created_at,
             COALESCE((SELECT json_agg(t.name ORDER BY t.name) FROM material_tags mt JOIN tags t ON t.id=mt.tag_id WHERE mt.material_id=m.id),'[]') AS tags
-            FROM materials m WHERE m.created_by=$1 AND m.published ORDER BY m.created_at DESC,m.id DESC LIMIT 100`, [id]);
+            FROM materials m WHERE m.created_by=$1 AND m.published ORDER BY m.created_at DESC,m.id DESC LIMIT $2 OFFSET $3`, [id,limit,(page-1)*limit]);
         res.json({
             creator: { id: creator.rows[0].id, display_name: creator.rows[0].display_name, created_at: creator.rows[0].created_at },
-            total: creator.rows[0].material_count,
+            total: creator.rows[0].material_count, page, limit,
             items: materials.rows,
         });
     });
@@ -130,12 +139,12 @@ export function installCatalog(app, pool, auth, env) {
         res.json({ ...result.rows[0], stages: stages.rows });
     });
     app.get('/materials/:id/comments', optionalAuth, async (req, res) => {
-        const id = positiveId(req.params.id);
+        const id = positiveId(req.params.id), {page,limit}=listInput(req.query);
         const material = await accessible(pool, req, id);
         if (!material.published) throw notFound();
         const result = await pool.query(`SELECT c.id,c.body,c.created_at,u.id AS user_id,coalesce(u.display_name,'Użytkownik') AS author
             FROM material_comments c JOIN users u ON u.id=c.user_id
-            WHERE c.material_id=$1 ORDER BY c.created_at,c.id LIMIT 100`, [id]);
+            WHERE c.material_id=$1 ORDER BY c.created_at,c.id LIMIT $2 OFFSET $3`, [id,limit,(page-1)*limit]);
         res.json({ items: result.rows });
     });
     app.post('/materials/:id/comments', auth, async (req, res) => {
@@ -148,19 +157,19 @@ export function installCatalog(app, pool, auth, env) {
         res.status(201).json({ ...result.rows[0], user_id: author.rows[0].id, author: author.rows[0].display_name });
     });
     app.post('/materials', auth, async (req, res) => {
-        const input = materialInput(req.body);
+        const input = materialInput(req.body), metadata = metadataInput(req.body.metadata);
         const row = await transaction(pool, async client => {
-            const result = await client.query(`INSERT INTO materials(created_by,type,title,description,author,url,content,published,publication_status) VALUES ($1,$2,$3,$4,$5,$6,$7,false,'private') RETURNING id,revision,publication_status`, [req.user.user_id,input.type,input.title,input.description,input.author,input.url,input.content]);
+            const result = await client.query(`INSERT INTO materials(created_by,type,title,description,author,url,content,metadata,published,publication_status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,false,'private') RETURNING id,revision,publication_status`, [req.user.user_id,input.type,input.title,input.description,input.author,input.url,input.content,JSON.stringify(metadata)]);
             await writeRelations(client, result.rows[0].id, input);
             return result.rows[0];
         });
         res.status(201).json(row);
     });
     app.put('/materials/:id', auth, async (req, res) => {
-        const id = positiveId(req.params.id), input = materialInput(req.body), revision = revisionInput(req.body);
+        const id = positiveId(req.params.id), input = materialInput(req.body), revision = revisionInput(req.body), metadata = metadataInput(req.body.metadata);
         const row = await transaction(pool, async client => {
             await owned(client,req,id,revision);
-            const result = await client.query(`UPDATE materials SET type=$2,title=$3,description=$4,author=$5,url=$6,content=$7,published=false,publication_status='private',review_note=NULL,submitted_at=NULL,reviewed_at=NULL,reviewed_by=NULL,updated_at=clock_timestamp(),revision=revision+1 WHERE id=$1 RETURNING id,revision,publication_status`, [id,input.type,input.title,input.description,input.author,input.url,input.content]);
+            const result = await client.query(`UPDATE materials SET type=$2,title=$3,description=$4,author=$5,url=$6,content=$7,metadata=$8,content_version=content_version+1,published=false,publication_status='private',review_note=NULL,submitted_at=NULL,reviewed_at=NULL,reviewed_by=NULL,updated_at=clock_timestamp(),revision=revision+1 WHERE id=$1 RETURNING id,revision,publication_status`, [id,input.type,input.title,input.description,input.author,input.url,input.content,JSON.stringify(metadata)]);
             await writeRelations(client,id,input);
             return result.rows[0];
         });
@@ -198,11 +207,12 @@ export function installCatalog(app, pool, auth, env) {
     app.get('/internal/recommendation-data/:id', serviceAuth(env), async (req, res) => {
         const id = positiveId(req.params.id);
         if (!(await pool.query('SELECT 1 FROM users WHERE id=$1',[id])).rowCount) throw Object.assign(new Error('User not found'),{status:404});
-        const materials = await pool.query(`SELECT m.id,m.title,m.description,${projection.split('m.*,')[1]} FROM materials m WHERE m.published`);
+        const materials = await pool.query(`SELECT m.id,m.title,m.description,${projection.split('m.*,')[1]} FROM materials m WHERE m.published AND NOT EXISTS(SELECT 1 FROM learner_materials l WHERE l.user_id=$1 AND l.material_id=m.id AND l.dismissed)`,[id]);
         const activity = await pool.query(`SELECT v.material_id,r.score FROM material_views v LEFT JOIN ratings r ON r.user_id=v.user_id AND r.material_id=v.material_id WHERE v.user_id=$1 AND v.viewed_at > now()-interval '180 days'
           UNION SELECT r.material_id,r.score FROM ratings r WHERE r.user_id=$1`,[id]);
         // No emails, tokens, password hashes or other users' activity leave Core.
-        res.json({ materials: materials.rows, activity: activity.rows });
+        const preferences=(await pool.query('SELECT interests FROM user_preferences WHERE user_id=$1',[id])).rows[0];
+        res.json({ materials: materials.rows, activity: activity.rows, interests: preferences?.interests || [] });
     });
     app.get('/recommendations/me', auth, async (req, res) => {
         let ranking;
@@ -216,10 +226,10 @@ export function installCatalog(app, pool, auth, env) {
             } catch { /* A cold or unavailable ML service must not break catalogue access. */ }
         }
         if (ranking) {
-            const result = await pool.query(`SELECT ${projection} FROM materials m WHERE m.published AND m.id=ANY($2::integer[]) AND NOT EXISTS(SELECT 1 FROM material_views v WHERE v.user_id=$1 AND v.material_id=m.id AND v.viewed_at > now()-interval '180 days') AND NOT EXISTS(SELECT 1 FROM ratings r WHERE r.user_id=$1 AND r.material_id=m.id) ORDER BY array_position($2::integer[],m.id)`, [req.user.user_id,ranking.ids]);
+            const result = await pool.query(`SELECT ${projection} FROM materials m WHERE m.published AND m.id=ANY($2::integer[]) AND NOT EXISTS(SELECT 1 FROM material_views v WHERE v.user_id=$1 AND v.material_id=m.id AND v.viewed_at > now()-interval '180 days') AND NOT EXISTS(SELECT 1 FROM ratings r WHERE r.user_id=$1 AND r.material_id=m.id) AND NOT EXISTS(SELECT 1 FROM learner_materials l WHERE l.user_id=$1 AND l.material_id=m.id AND l.dismissed) ORDER BY array_position($2::integer[],m.id)`, [req.user.user_id,ranking.ids]);
             return res.json({ mode: ranking.mode, items: result.rows.map(({content,...item}) => item) });
         }
-        const result = await pool.query(`SELECT ${projection} FROM materials m WHERE m.published AND NOT EXISTS(SELECT 1 FROM material_views v WHERE v.user_id=$1 AND v.material_id=m.id AND v.viewed_at > now()-interval '180 days') AND NOT EXISTS(SELECT 1 FROM ratings r WHERE r.user_id=$1 AND r.material_id=m.id) ORDER BY average_rating DESC NULLS LAST,rating_count DESC,m.id LIMIT 5`, [req.user.user_id]);
+        const result = await pool.query(`SELECT ${projection} FROM materials m WHERE m.published AND NOT EXISTS(SELECT 1 FROM material_views v WHERE v.user_id=$1 AND v.material_id=m.id AND v.viewed_at > now()-interval '180 days') AND NOT EXISTS(SELECT 1 FROM ratings r WHERE r.user_id=$1 AND r.material_id=m.id) AND NOT EXISTS(SELECT 1 FROM learner_materials l WHERE l.user_id=$1 AND l.material_id=m.id AND l.dismissed) ORDER BY average_rating DESC NULLS LAST,rating_count DESC,m.id LIMIT 5`, [req.user.user_id]);
         res.json({ mode: 'fallback', items: result.rows.map(({content,...item}) => item) });
     });
 }

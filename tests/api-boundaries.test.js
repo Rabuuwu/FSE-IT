@@ -6,7 +6,7 @@ import { PassThrough } from 'node:stream';
 import { createApp, start } from '../coreFSE.js';
 
 const env = { JWT_SECRET: 'isolated-test-secret-at-least-32-characters' };
-const versions = ['001_legacy.sql', '002_catalog.sql', '003_identity_indexes.sql', '004_material_comments.sql', '005_material_moderation.sql', '006_account_sessions.sql'];
+const versions = ['001_legacy.sql', '002_catalog.sql', '003_identity_indexes.sql', '004_material_comments.sql', '005_material_moderation.sql', '006_account_sessions.sql', '007_learning_workspace.sql', '008_account_recovery.sql', '009_content_revisions.sql'];
 const token = (id = 2, role = 'admin') => jwt.sign({ user_id: id, role }, env.JWT_SECRET);
 // These tests execute real routing/auth/error middleware with a controlled database double.
 // They do not establish PostgreSQL query correctness, isolation or migration success.
@@ -37,6 +37,7 @@ function database(handler) {
 function authDatabase(handler, role = 'user') {
     return database(async (sql, args) => {
         if (sql.startsWith('SELECT u.id, u.email')) return { rowCount: 1, rows: [{ id: 2, email: 'test@example.invalid', role, session_version: 0 }] };
+        if (sql.startsWith('SELECT 1 FROM revoked_tokens')) return {rowCount:0,rows:[]};
         return handler(sql, args);
     });
 }
@@ -115,6 +116,7 @@ test('database failure returns generic error without database detail', async () 
 test('password session versions revoke old and malformed tokens while allowing legacy version zero', async () => {
     let currentVersion=0;
     const app=createApp(database(async sql=>{
+        if(sql.startsWith('SELECT 1 FROM revoked_tokens'))return {rowCount:0,rows:[]};
         assert.match(sql,/^SELECT u.id, u.email/);
         return {rowCount:1,rows:[{id:2,email:'test@example.invalid',role:'user',session_version:currentVersion}]};
     }),env);
@@ -125,4 +127,14 @@ test('password session versions revoke old and malformed tokens while allowing l
         assert.equal((await request(app,'/me','GET',bearer)).status,401);
     }
     assert.equal((await request(app,'/me','GET',jwt.sign({user_id:2,session_version:1},env.JWT_SECRET))).status,200);
+});
+
+test('new learning and moderation routes require identity and current administrator role',async()=>{
+ const app=createApp(authDatabase(()=>assert.fail('private data query before authorization')),env);
+ for(const path of ['/learning','/notifications','/account/export','/paths','/preferences'])assert.equal((await request(app,path)).status,401);
+ for(const path of ['/admin/reports','/admin/revisions'])assert.equal((await request(app,path,'GET',token())).status,403);
+});
+test('revoked token cannot authorize a request even at the current session version',async()=>{
+ const app=createApp(database(async sql=>sql.startsWith('SELECT u.id')?{rowCount:1,rows:[{id:2,email:'test@example.invalid',role:'user',session_version:0}]}:{rowCount:1,rows:[{}]}),env);
+ assert.equal((await request(app,'/me','GET',token())).status,401);
 });

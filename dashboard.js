@@ -44,8 +44,12 @@ async function init(){
  if(!hasAuthToken()){message('pageMessage','Pulpit jest dostępny po zalogowaniu.');$('loginRequired').hidden=false;return;}
  try{
   const {user}=await api('/me');setAccountUser(user);$('adminLink').hidden=user.role!=='admin';$('dashboardContent').hidden=$('logout').hidden=false;message('pageMessage','');
-  $('logout').onclick=()=>{removeAuthToken();location.assign('login.html');};$('summaryRetry').onclick=summary;$('recommendationRetry').onclick=recommendations;
-  await Promise.all([summary(),recommendations()]);
+  $('logout').onclick=()=>logoutAccount();$('summaryRetry').onclick=summary;$('recommendationRetry').onclick=recommendations;
+  await Promise.all([summary(),recommendations(),learningPreview()]);
  }catch(error){message('pageMessage',error.message,true);$('loginRequired').hidden=false;}
 }
 init();
+
+async function learningPreview(){
+ try{const data=await api('/learning?limit=5');const list=$('continueLearning');list.replaceChildren();for(const item of data.items){const p=document.createElement('p'),a=document.createElement('a');a.href=`material.html?id=${item.id}${item.next_position===null?'':`#stage-${item.next_position}`}`;a.textContent=item.title;p.append(a);if(item.type==='course')p.append(document.createTextNode(` — ${item.completed}/${item.stages} etapów`));list.append(p);}message('learningMessage',data.items.length?'Ostatnio zapisane materiały i postęp.':'Zapisz materiał lub oznacz etap kursu, aby wrócić do niego tutaj.');}catch(error){message('learningMessage',error.message,true);}
+}

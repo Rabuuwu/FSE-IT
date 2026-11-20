@@ -3,11 +3,14 @@ import 'dotenv/config';
 import pool from './db.js';
 import express from 'express';
 import bcrypt from 'bcrypt';
+import {randomUUID} from 'node:crypto';
 import jwt from 'jsonwebtoken';
 
 import { createAuthMiddleware } from './auth.js';
 import { configureApp } from './server/security.js';
 import { transaction } from './server/transaction.js';
+import { installLearning } from './server/learning.js';
+import { installRecovery, deliverAccountMail, mailConfigured } from './server/recovery.js';
 import { installAccount } from './server/account.js';
 import { installCatalog } from './server/catalog.js';
 import { validateLogin, validateCredentials } from './server/validation.js';
@@ -20,6 +23,8 @@ export function createApp(database = pool, env = process.env) {
     const authMiddleware = createAuthMiddleware(pool, env);
     const SALT_ROUNDS = Number(env.BCRYPT_SALT_ROUNDS || 12);
     configureApp(app, env);
+    installLearning(app, pool, authMiddleware);
+    installRecovery(app, pool, authMiddleware, env);
     installCatalog(app, pool, authMiddleware, env);
     installAccount(app, pool, authMiddleware, env);
     app.use(['/articles', '/courses'], (req, res, next) => {
@@ -101,7 +106,7 @@ export function createApp(database = pool, env = process.env) {
                 return res.status(401).json({ error: 'Invalid email or password' });
             }
 
-            const payload = { user_id: user.id, role_id: user.role_id, role: user.role_name || 'user', session_version: user.session_version ?? 0 };
+            const payload = { jti: randomUUID(), user_id: user.id, role_id: user.role_id, role: user.role_name || 'user', session_version: user.session_version ?? 0 };
             const secret = env.JWT_SECRET;
 
             const token = jwt.sign(payload, secret, { expiresIn: env.JWT_EXPIRES_IN || '1h' });
@@ -387,7 +392,10 @@ export async function start(database = pool, env = process.env) {
     if (!await schemaReady(database)) throw new Error('Run npm run migrate before starting the API');
     const app = createApp(database, env);
     const server = app.listen(Number(env.PORT || 3000), () => console.log('FSE-IT API ready'));
-    const stop = () => server.close(() => database.end().then(() => process.exit(0)));
+    let mailBusy=false;
+    const mailTimer=mailConfigured(env)?setInterval(async()=>{if(mailBusy)return;mailBusy=true;try{await deliverAccountMail(database,env);}catch{console.error('mail_worker_failed');}finally{mailBusy=false;}},5000):null;
+    mailTimer?.unref();
+    const stop = () => { if(mailTimer)clearInterval(mailTimer); server.close(() => database.end().then(() => process.exit(0))); };
     process.on('SIGTERM', stop);
     process.on('SIGINT', stop);
     return server;

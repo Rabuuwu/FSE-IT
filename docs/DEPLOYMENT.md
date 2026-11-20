@@ -24,7 +24,7 @@ Free Render PostgreSQL expires after 30 days and is unsuitable as the permanent 
 
 ## Prepare a release
 
-1. Complete `npm install` online, review the generated lockfile and dependency audit, commit the lockfile, then change CI/build commands to `npm ci`. Resolve material audit findings before release.
+1. Run `npm ci` using the tracked lockfile and review the dependency audit. Resolve material audit findings before release.
 2. Run unit/model, real PostgreSQL integration and real-stack E2E from [LOCAL_SETUP.md](LOCAL_SETUP.md). Inspect browser trace, keyboard behavior and mobile screenshot. CI configuration alone is not evidence of a passing run.
 3. Inventory actual production schema, case-colliding emails, account roles and private resources without writing secrets to logs. Compare with baseline migration assumptions: `users.role_id`, `roles.name`, and legacy article/course tables.
 4. Snapshot or export production data. The following is a manual template, not a command already run:
@@ -37,7 +37,7 @@ pg_restore --dbname="$RESTORE_DATABASE_URL" --no-owner --no-privileges backups/p
 
 `RESTORE_DATABASE_URL` must identify a separate empty database. Restrict backup permissions/storage; dumps include personal and authentication data. Never commit dumps. Verify counts, representative article bodies, course ordering, private JSON and test authentication on the restored copy before considering the backup usable.
 
-5. Run `npm run migrate` against the restored copy first, then `npm run migration:report`. Migrations 001 (baseline), 002 (catalogue copy), 003 (normalized email uniqueness and indexes), 004 (display names and material comments) are serialized with a database advisory lock and applied transactionally once. The server refuses readiness without the final migration.
+5. Run `npm run migrate` against the restored copy first, then `npm run migration:report`. Migrations 001 (baseline), 002 (catalogue copy), 003 (normalized email uniqueness and indexes), 004 (comments), 005 (moderation), 006 (session versions), 007 (learning workspace), 008 (recovery/outbox), 009 (publication revisions) are serialized with a database advisory lock and applied transactionally once. The server refuses readiness without the final migration.
 6. Original `resources.data` stays private and intact. Original articles/courses and stages remain in legacy tables; catalogue records retain `legacy_type`/`legacy_id` and are drafts. Confirm counts, authors, full text and ordering. Review malformed private resource IDs separately. A case collision aborts migration 003 instead of merging identities; resolve on the copy before repeating any release procedure.
 7. Review drafts and explicitly decide publication. Migration does not publish them. Record the accepted data mapping and any remediation.
 
@@ -62,3 +62,8 @@ ML cold start has a 4-second Core deadline and a general-ranking fallback; Core 
 - After new writes begin, prefer a forward fix. A full restore loses changes after the backup. Export/reconcile those changes with a deliberate mapping before switching databases; document the recovery point.
 - The catalogue retains shared material content when deleting its creator (`ON DELETE SET NULL`). Account/private-data deletion cannot be undone by reverting code; restoration needs a backup and a deliberate privacy/data decision.
 - Rehearse restore and rollback on the isolated copy and record duration/result before marking the release gate complete.
+
+
+### Product expansion release gate (2026-11-20)
+
+Run `bash scripts/test-product.sh` before release. Startup now requires migrations through 009. Test recovery and owner isolation on the disposable database; review new UI mobile/keyboard behavior. Complete [MAIL_SETUP.md](MAIL_SETUP.md) for email. The existing limiter remains per-process and requires verified proxy settings; there is no claim of multi-instance shared limiting. No production readiness is inferred from unit tests.

@@ -1,7 +1,7 @@
 'use strict';
 const $ = id => document.getElementById(id);
 const types = {link:'Odnośnik',pdf:'PDF',article:'Artykuł',course:'Kurs'};
-let user, editing, listController, searchTimer, page = 1, total = 0, filter = {q:'',tag:'',type:''};
+let user, editing, listController, searchTimer, page = 1, total = 0, filter = {q:'',tag:'',type:'',sort:'newest'};
 const notice = (id, message, error = false) => { $(id).textContent = message; $(id).classList.toggle('error',error); };
 function button(label, action, className = '') { const el=document.createElement('button'); el.type='button';el.textContent=label;el.className=className;el.addEventListener('click',()=>Promise.resolve().then(action).catch(err=>notice('message',err.message,true)));return el; }
 function cards(items, target) {
@@ -42,7 +42,7 @@ function materialCount(count){
     return `${count} ${noun}`;
 }
 function changeFilters(){
-    filter={q:$('search').value.trim(),tag:$('tag').value,type:$('type').value};page=1;updateSearchLayout();loadList();
+    filter={q:$('search').value.trim(),tag:$('tag').value,type:$('type').value,sort:$('sort').value};page=1;updateSearchLayout();loadList();
     $('clearFilters').disabled=!filter.q&&!filter.tag&&!filter.type;
 }
 function updateSearchLayout(){
@@ -78,7 +78,8 @@ async function loadTags(){try{const data=await api('/tags');const select=$('tag'
 function resetFilters(){clearTimeout(searchTimer);$('search').value='';$('tag').value='';$('type').value='';changeFilters();}
 function editMaterial(id){location.assign(`material-editor.html?id=${encodeURIComponent(id)}`);}
 async function init(){
-    $('logout').onclick=()=>{removeAuthToken();location.assign('login.html');};
+    $('logout').onclick=()=>logoutAccount();
+    $('sort').onchange=changeFilters;
     $('filters').onsubmit=event=>{event.preventDefault();clearTimeout(searchTimer);changeFilters();};
     $('search').addEventListener('input',()=>{clearTimeout(searchTimer);searchTimer=setTimeout(changeFilters,320);});
     $('tag').addEventListener('change',changeFilters);$('type').addEventListener('change',changeFilters);
@@ -93,7 +94,7 @@ async function init(){
         const logged=!!user;for(const id of ['create','logout','mineLink'])$(id).hidden=!logged;
         $('loginLink').hidden=$('guestCreate').hidden=logged;$('usersLink').hidden=user?.role!=='admin';
         $('recommendations').closest('section').hidden=!logged;
-        const params=new URLSearchParams(location.search);filter={q:params.get('q')||'',tag:params.get('tag')||'',type:params.get('type')||''};page=Math.max(1,Number(params.get('page'))||1);$('search').value=filter.q;$('type').value=filter.type;$('clearFilters').disabled=!filter.q&&!filter.tag&&!filter.type;updateSearchLayout();
+        const params=new URLSearchParams(location.search);filter={q:params.get('q')||'',tag:params.get('tag')||'',type:params.get('type')||'',sort:params.get('sort')||'newest'};page=Math.max(1,Number(params.get('page'))||1);$('search').value=filter.q;$('type').value=filter.type;$('sort').value=filter.sort;$('clearFilters').disabled=!filter.q&&!filter.tag&&!filter.type;updateSearchLayout();
         await refresh();
         if(logged&&params.get('create')==='1')location.assign('material-editor.html');
     }catch(err){notice('message',err.message,true);$('retry').hidden=false;$('retry').onclick=init;}

@@ -1,7 +1,7 @@
 'use strict';
 const $ = id => document.getElementById(id);
 const types={link:'Odnośnik',pdf:'PDF',article:'Artykuł',course:'Kurs'};
-let materialId,material;
+let materialId,material,currentUser,commentPage=1;
 function message(id,text,error=false){$(id).textContent=text;$(id).classList.toggle('error',error);}
 function formatDate(value){return new Intl.DateTimeFormat('pl-PL',{dateStyle:'long'}).format(new Date(value));}
 function renderStars(){
@@ -29,11 +29,15 @@ function renderComments(items){
         const article=document.createElement('article');article.className='comment';
         const header=document.createElement('div');header.className='comment-heading';const author=document.createElement('strong');author.textContent=item.author;const date=document.createElement('time');date.dateTime=item.created_at;date.textContent=formatDate(item.created_at);header.append(author,date);
         const body=document.createElement('p');body.textContent=item.body;article.append(header,body);list.append(article);
+        function action(label,work){const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=async()=>{b.disabled=true;try{await work();}catch(e){message('commentsStatus',e.message,true);}finally{b.disabled=false;}};article.append(b);}
+        if(currentUser&&(currentUser.user_id===item.user_id||currentUser.role==='admin'))action('Usuń',async()=>{if(confirm('Usunąć komentarz?')){await api(`/comments/${item.id}`,{method:'DELETE'});await loadComments();}});
+        if(currentUser?.user_id===item.user_id)action('Edytuj',async()=>{const body=prompt('Nowa treść komentarza:',item.body);if(body!==null){await api(`/comments/${item.id}`,{method:'PATCH',body:JSON.stringify({body})});await loadComments();}});
+        if(currentUser)action('Zgłoś',async()=>{const reason=prompt('Powód zgłoszenia:');if(reason){await api(`/materials/${materialId}/report`,{method:'POST',body:JSON.stringify({reason,comment_id:item.id})});message('commentsStatus','Zgłoszenie zapisane.');}});
     }
 }
 async function loadComments(){
     message('commentsStatus','Ładowanie komentarzy…');
-    try{const data=await api(`/materials/${materialId}/comments`);renderComments(data.items);}
+    try{const data=await api(`/materials/${materialId}/comments?page=${commentPage}`);renderComments(data.items);let nav=document.getElementById("commentPages");if(!nav){nav=document.createElement("div");nav.id="commentPages";$("commentsList").after(nav);}nav.replaceChildren();for(const [label,delta,disabled]of [["Poprzednia strona",-1,commentPage===1],["Następna strona",1,data.items.length<20]]){const b=document.createElement("button");b.type="button";b.textContent=label;b.disabled=disabled;b.onclick=()=>{commentPage+=delta;loadComments();};nav.append(b);}}
     catch(error){message('commentsStatus',error.message,true);}
 }
 async function submitComment(event){
@@ -44,10 +48,10 @@ async function submitComment(event){
 }
 function renderMaterial(){
     document.title=`${material.title} — FSE-IT`;
-    $('materialType').textContent=types[material.type]||'Materiał';$('materialTitle').textContent=material.title;$('materialDescription').textContent=material.description;
+    $('materialType').textContent=types[material.type]||'Materiał';$('materialTitle').textContent=material.title;$('materialDescription').textContent=material.description;const meta=material.metadata||{};const info=document.createElement('p');info.textContent=[meta.level,meta.language,meta.minutes?`${meta.minutes} min`:null,meta.technology_version,meta.outdated?'Materiał oznaczony jako nieaktualny':null,meta.prerequisites?`Wymagania: ${meta.prerequisites}`:null].filter(Boolean).join(' · ');$('materialDescription').after(info);
     const content=$('materialContent');content.replaceChildren();
     if(material.type==='article'&&material.content){const article=document.createElement('div');article.innerHTML=markdownToHtml(material.content);content.append(article);}
-    if(material.type==='course')for(const [index,stage] of material.stages.entries()){const section=document.createElement('section');section.className='course-stage';const eyebrow=document.createElement('p');eyebrow.className='eyebrow';eyebrow.textContent=`ETAP ${index+1}`;const title=document.createElement('h2');title.textContent=stage.title;const text=document.createElement('div');text.innerHTML=markdownToHtml(stage.content);section.append(eyebrow,title,text);content.append(section);}
+    if(material.type==='course')for(const [index,stage] of material.stages.entries()){const section=document.createElement('section');section.className='course-stage';section.id=`stage-${index}`;const eyebrow=document.createElement('p');eyebrow.className='eyebrow';eyebrow.textContent=`ETAP ${index+1}`;const title=document.createElement('h2');title.textContent=stage.title;const text=document.createElement('div');text.innerHTML=markdownToHtml(stage.content);section.append(eyebrow,title,text);content.append(section);}
     const href=safeHttpsUrl(material.url);if(href){const link=document.createElement('a');link.className='button external-link';link.href=href;link.target='_blank';link.rel='noopener noreferrer';link.textContent=material.type==='pdf'?'Otwórz PDF':'Przejdź do materiału';link.addEventListener('click',()=>hasAuthToken()&&api(`/materials/${materialId}/views`,{method:'POST'}).catch(error=>message('pageMessage',error.message,true)));$('externalMaterial').replaceChildren(link);}
     if(material.published){$('feedback').hidden=false;renderStars();loadComments();if(hasAuthToken()&&['article','course'].includes(material.type))api(`/materials/${materialId}/views`,{method:'POST'}).catch(error=>message('pageMessage',error.message,true));}
 }
@@ -56,7 +60,7 @@ async function init(){
     if(!materialId||!/^[1-9]\d*$/.test(materialId)||Number(materialId)>2147483647){message('pageMessage','Nieprawidłowy adres materiału.',true);return;}
     $('commentForm').addEventListener('submit',submitComment);
     try{
-        const [account,data]=await Promise.all([hasAuthToken()?api('/me'):Promise.resolve(null),api(`/materials/${materialId}`)]);setAccountUser(account?.user||null);material=data;renderMaterial();if(!account){$('commentForm').hidden=true;const login=document.createElement('a');login.href='login.html';login.textContent='Zaloguj się, aby oceniać i komentować';$('ratingMessage').append(login);}if(!material.published){const state=document.createElement('p');state.className='status-note';state.textContent=({private:'Materiał prywatny',pending:'Materiał oczekuje na weryfikację',rejected:'Materiał wymaga poprawy'})[material.publication_status]||'Materiał niepubliczny';$('materialType').after(state);if(material.review_note){const note=document.createElement('p');note.textContent=`Uwagi administratora: ${material.review_note}`;state.after(note);}}
+        const [account,data]=await Promise.all([hasAuthToken()?api('/me'):Promise.resolve(null),api(`/materials/${materialId}`)]);setAccountUser(account?.user||null);material=data;currentUser=account?.user;renderMaterial();loadMaterialLearning(material,currentUser);if(!account){$('commentForm').hidden=true;const login=document.createElement('a');login.href='login.html';login.textContent='Zaloguj się, aby oceniać i komentować';$('ratingMessage').append(login);}if(!material.published){const state=document.createElement('p');state.className='status-note';state.textContent=({private:'Materiał prywatny',pending:'Materiał oczekuje na weryfikację',rejected:'Materiał wymaga poprawy'})[material.publication_status]||'Materiał niepubliczny';$('materialType').after(state);if(material.review_note){const note=document.createElement('p');note.textContent=`Uwagi administratora: ${material.review_note}`;state.after(note);}}
     }catch(error){$('materialTitle').textContent='Nie udało się otworzyć materiału';message('pageMessage',error.message,true);}
 }
 init();

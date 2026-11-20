@@ -31,13 +31,14 @@ export function configureApp(app, env) {
         for (const [key, bucket] of buckets) if (bucket.until <= now) buckets.delete(key);
         // Express accepts case variants and one trailing slash by default.
         // Match the same aliases so they cannot switch to the larger API budget.
-        const auth = /^\/(?:login|register)\/?$/i.test(req.path) || (['PATCH','PUT','DELETE'].includes(req.method) && /^\/account(?:\/password)?\/?$/i.test(req.path));
-        const key = `${req.ip}:${auth ? 'auth' : 'api'}`;
+        const auth = /^\/(?:auth|account\/email)(?:\/|$)/i.test(req.path) || /^\/(?:login|register)\/?$/i.test(req.path) || (['PATCH','PUT','DELETE'].includes(req.method) && /^\/account(?:\/password)?\/?$/i.test(req.path));
+        const interaction = req.method === 'POST' && /^\/materials\/\d+\/(?:comments|report)\/?$/i.test(req.path);
+        const key = `${req.ip}:${auth ? 'auth' : interaction ? 'interaction' : 'api'}`;
         // Bound memory under a large number of different addresses.
         if (!buckets.has(key) && buckets.size >= 20000) return res.status(429).json({ error: 'Try again later' });
         const bucket = buckets.get(key) || { count: 0, until: now + 60000 };
         bucket.count++; buckets.set(key, bucket);
-        if (bucket.count > (auth ? 20 : 300)) {
+        if (bucket.count > (auth ? 20 : interaction ? 10 : 300)) {
             res.setHeader('Retry-After', String(Math.ceil((bucket.until - now) / 1000)));
             return res.status(429).json({ error: 'Too many requests. Try again later.' });
         }

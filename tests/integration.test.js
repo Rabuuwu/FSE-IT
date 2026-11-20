@@ -384,10 +384,88 @@ test('deleting the last administrator is refused without changing the account',a
     }
 });
 test('revoked administrator and deleted user lose access with the original tokens',async()=>{
-    await pool.query("UPDATE users SET role_id=1 WHERE email='admin@example.com'");
-    assert.equal((await request('/admin/materials','GET',undefined,admin)).status,403);
-    assert.equal((await request('/materials','POST',draft,admin)).status,201);
-    await pool.query("DELETE FROM users WHERE email='user@example.com'");
-    assert.equal((await request('/me','GET',undefined,user)).status,401);
-    assert.equal((await request('/admin/reset','POST',{},admin)).status,404);
+    // Dedicated identities: revocation/deletion must not corrupt later scenarios' fixtures.
+    const revokedAdmin=await accountFixture(), deletedUser=await accountFixture();
+    await pool.query('UPDATE users SET role_id=2 WHERE id=$1',[revokedAdmin.id]);
+    assert.equal((await request('/admin/materials','GET',undefined,revokedAdmin.token)).status,200);
+    await pool.query('UPDATE users SET role_id=1 WHERE id=$1',[revokedAdmin.id]);
+    assert.equal((await request('/admin/materials','GET',undefined,revokedAdmin.token)).status,403);
+    assert.equal((await request('/materials','POST',draft,revokedAdmin.token)).status,201);
+    await pool.query('DELETE FROM users WHERE id=$1',[deletedUser.id]);
+    assert.equal((await request('/me','GET',undefined,deletedUser.token)).status,401);
+    assert.equal((await request('/admin/reset','POST',{},revokedAdmin.token)).status,404);
+});
+
+test('learning state is private, progress validates current content and notes survive export',async()=>{
+ const id=await publish({...draft,type:'course',stages:[{title:'One',content:'First'},{title:'Two',content:'Second'}]});
+ assert.equal((await request(`/learning/${id}`,'PATCH',{bookmarked:true,note:'Private thought'},user)).status,204);
+ assert.equal((await request(`/learning/${id}`,'GET',undefined,admin)).body.note,'');
+ const m=(await request(`/materials/${id}`)).body;
+ assert.equal((await request(`/learning/${id}/progress`,'PUT',{position:0,completed:true,content_version:m.content_version},user)).status,204);
+ assert.equal((await request(`/learning/${id}/progress`,'PUT',{position:0,completed:true,content_version:999},user)).status,409);
+ assert.equal((await request(`/learning/${id}/progress`,'PUT',{position:200,completed:true,content_version:m.content_version},user)).status,400);
+ assert.equal((await request(`/learning/${id}/progress`,'PUT',{position:2,completed:true,content_version:m.content_version},user)).status,404);
+ assert.equal((await request('/learning','GET',undefined,user)).body.items.find(x=>x.id===id).completed,1);
+ assert.equal((await request('/account/export','GET',undefined,admin)).body.learning.some(x=>x.note==='Private thought'),false);
+ assert.equal((await request('/account/export','GET',undefined,user)).body.learning.find(x=>x.material_id===id).note,'Private thought');
+ const created=await request('/paths','POST',{title:'Private path',material_ids:[id]},user);assert.equal(created.status,201);
+ assert.equal((await request(`/paths/${created.body.id}`,'GET',undefined,admin)).status,404);
+ assert.equal((await request(`/paths/${created.body.id}`,'GET',undefined,user)).body.items[0].id,id);
+});
+
+test('quizzes hide answers before submission, grade server-side and reject stale versions',async()=>{
+ const id=await publish();const questions=[{text:'2+2?',options:['3','4'],answer:1,explanation:'Addition'}];
+ assert.equal((await request(`/materials/${id}/quiz`,'PUT',{questions},user)).status,403);
+ assert.equal((await request(`/materials/${id}/quiz`,'PUT',{questions},admin)).status,204);
+ const quiz=(await request(`/materials/${id}/quiz`,'GET',undefined,user)).body;
+ assert.equal(quiz.questions[0].answer,undefined);assert.equal(quiz.questions[0].explanation,undefined);
+ const result=await request(`/materials/${id}/quiz/attempts`,'POST',{version:quiz.version,answers:[1]},user);assert.equal(result.status,200);assert.equal(result.body.correct,1);
+ assert.equal((await request(`/materials/${id}/quiz/attempts`,'POST',{version:0,answers:[1]},user)).status,409);
+});
+
+test('new content revision keeps public version until approval and invalidates old progress',async()=>{
+ const id=await publish({...draft,type:'course',stages:[{title:'Original',content:'Original stage'}]});
+ const original=(await request(`/materials/${id}`)).body;
+ await request(`/learning/${id}/progress`,'PUT',{position:0,completed:true,content_version:original.content_version},user);
+ const payload={...editing(original),title:'Revised title',stages:[{title:'Changed',content:'New stage'}]};
+ const saved=await request(`/materials/${id}/revision`,'PUT',payload,admin);assert.equal(saved.status,200);
+ assert.equal((await request(`/materials/${id}`)).body.title,original.title);
+ assert.equal((await request(`/materials/${id}/revision`,'GET',undefined,user)).status,404);
+ assert.equal((await request(`/materials/${id}/revision/submit`,'POST',{revision:saved.body.revision},admin)).status,204);
+ const pending=(await request(`/materials/${id}/revision`,'GET',undefined,admin)).body.draft;
+ assert.equal((await request(`/admin/materials/${id}/revision/review`,'POST',{revision:pending.revision,decision:'approve'},admin)).status,204);
+ assert.equal((await request(`/materials/${id}`)).body.title,'Revised title');
+ assert.equal((await request(`/learning/${id}`,'GET',undefined,user)).body.progress.length,0);
+ assert.equal((await request(`/materials/${id}/versions`,'GET',undefined,admin)).body.items[0].payload.title,original.title);
+ assert.equal((await request(`/admin/materials/${id}/revision/review`,'POST',{revision:pending.revision,decision:'approve'},admin)).status,409);
+});
+
+test('comments paginate, reports are private, and only owners/admin can remove comments',async()=>{
+ const id=await publish();const comment=await request(`/materials/${id}/comments`,'POST',{body:'Review me'},user);assert.equal(comment.status,201);
+ assert.equal((await request(`/comments/${comment.body.id}`,'PATCH',{body:'Changed'},admin)).status,404);
+ assert.equal((await request(`/materials/${id}/report`,'POST',{reason:'Wrong information',comment_id:comment.body.id},user)).status,201);
+ assert.equal((await request('/admin/reports','GET',undefined,user)).status,403);
+ assert.equal((await request(`/materials/${id}/comments?page=2&limit=1`)).body.items.length,0);
+ assert.equal((await request(`/comments/${comment.body.id}`,'DELETE',undefined,admin)).status,204);
+ assert.equal((await request(`/materials/${id}/comments`)).body.items.length,0);
+});
+
+test('email links are single-use, reset revokes sessions and mail tokens are encrypted at rest',async()=>{
+ const {deliverAccountMail,digestToken}=await import('../server/recovery.js');const sent=[];
+ env.sendAccountMail=async(email,purpose,token)=>sent.push({email,purpose,token});
+ try{
+ const email=`recovery-${randomUUID()}@example.com`;await request('/register','POST',{email,password:'original-long-password'});
+ const token=(await request('/login','POST',{email,password:'original-long-password'})).body.token;
+ assert.equal((await request('/account/email/request','POST',{},token)).status,202);
+ assert.equal(sent.length,0);await deliverAccountMail(pool,env);assert.equal(sent[0].purpose,'verify');
+ const stored=(await pool.query('SELECT * FROM account_actions WHERE digest=$1',[digestToken(sent[0].token)])).rows[0];assert.equal(JSON.stringify(stored).includes(sent[0].token),false);
+ assert.equal((await request('/auth/actions/confirm','POST',sent[0])).status,200);
+ assert.equal((await request('/auth/actions/confirm','POST',sent[0])).status,400);
+ assert.equal((await request('/auth/reset/request','POST',{email})).status,202);await deliverAccountMail(pool,env);
+ const reset={...sent[1],password:'replacement-long-password'};
+ const results=await Promise.all([request('/auth/actions/confirm','POST',reset),request('/auth/actions/confirm','POST',reset)]);
+ assert.deepEqual(results.map(x=>x.status).sort(),[200,400]);assert.equal((await request('/me','GET',undefined,token)).status,401);
+ const fresh=(await request('/login','POST',{email,password:reset.password})).body.token;
+ assert.equal((await request('/auth/logout','POST',{},fresh)).status,204);assert.equal((await request('/me','GET',undefined,fresh)).status,401);
+ }finally{delete env.sendAccountMail;}
 });

@@ -1,5 +1,5 @@
 import { cp, mkdir, readFile, writeFile } from 'node:fs/promises';
-const files=['index.html','login.html','register.html','catalog.html','catalog.js','my-materials.html','my-materials.js','creator.html','creator.js','material.html','material.js','material-editor.html','material-editor.js','utils.js','icons.js','account-menu.js','account.html','account.js','config.js','dashboard.html','dashboard.js','admin.html','admin.js','article-creator.html','article-creator.js','article-viewer.html','article-viewer.js'];
+const files=['editor-extras.js','material-learning.js','learning.html','learning.js','recovery.html','recovery.js','index.html','login.html','register.html','catalog.html','catalog.js','my-materials.html','my-materials.js','creator.html','creator.js','material.html','material.js','material-editor.html','material-editor.js','utils.js','icons.js','account-menu.js','account.html','account.js','config.js','dashboard.html','dashboard.js','admin.html','admin.js','article-creator.html','article-creator.js','article-viewer.html','article-viewer.js'];
 await mkdir('dist',{recursive:true});
 for(const file of files) await cp(file,`dist/${file}`);
 await cp('css','dist/css',{recursive:true});

@@ -42,7 +42,7 @@ export function installAccount(app, pool, auth, env) {
                 if (supplied === undefined) invalid('Current password is required to change email');
                 await checkPassword(row, supplied);
             }
-            const updated = await client.query('UPDATE users SET display_name=$2,email=$3 WHERE id=$1 RETURNING id,email,display_name', [row.id,displayName === undefined ? row.display_name : displayName,email ?? row.email]);
+            const updated = await client.query('UPDATE users SET display_name=$2,email_verified_at=CASE WHEN email=$3 THEN email_verified_at ELSE NULL END,email=$3 WHERE id=$1 RETURNING id,email,display_name', [row.id,displayName === undefined ? row.display_name : displayName,email ?? row.email]);
             return profile({ ...updated.rows[0], role: row.role });
         });
         res.json({ user });

@@ -18,12 +18,12 @@ Use Node.js 22+, npm, Python 3.12+, and PostgreSQL 17. See [Local setup and veri
 cp .env.example .env
 # Set independent JWT_SECRET and ML_SERVICE_TOKEN values in .env.
 docker compose up -d db
-npm install
+npm ci
 npm run migrate
 npm start
 ```
 
-Start the Python recommendation API and build/serve the frontend in separate terminals as described in the setup guide. `npm install` is currently used because the repository does not yet contain a reviewed `package-lock.json`; commit and use the generated lockfile before treating installs as reproducible.
+Start the Python recommendation API and build/serve the frontend in separate terminals as described in the setup guide. `package-lock.json` is tracked. CI and Render use `npm ci`; an isolated offline clean installation passed on 2026-11-20.
 
 ## Verification
 
@@ -42,3 +42,15 @@ Integration and E2E tests use a dedicated disposable test database and the real 
 - [Local setup and verification](docs/LOCAL_SETUP.md)
 - [API contract](docs/API.md)
 - [Deployment, backup, and recovery](docs/DEPLOYMENT.md)
+
+## Product expansion — 2026-11-20
+
+The working tree now includes bookmarks, private notes, version-aware course progress, private learning paths, administrator-published quizzes, notifications, comment moderation/reports, publication revision drafts, content metadata/sorting, browser draft recovery, own-data export, author aggregates, recommendation preferences, server logout and email verification/password recovery. See [scope and verification](docs/PRODUCT_EXPANSION.md).
+
+**Not yet release-verified:** migrations 007–009 and the new PostgreSQL/E2E flows require the isolated test harness below. No production migrations or deployment were performed. Old published content stays visible when the editor uses the new revision workflow; the legacy direct PUT still explicitly makes a material private.
+
+```sh
+bash scripts/test-product.sh
+```
+
+The script creates its own temporary local database cluster and stops it afterward. It requires PostgreSQL binaries, the existing Python venv and Playwright/Chrome. It never uses the application's production database or Gmail credentials. Email setup is documented in [MAIL_SETUP.md](docs/MAIL_SETUP.md).

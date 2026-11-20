@@ -39,3 +39,8 @@ async function api(path, options = {}) {
     if (!response.ok) throw new Error(data?.error || `Błąd serwera (${response.status}). Spróbuj ponownie.`);
     return data;
 }
+
+async function logoutAccount() {
+ try { await api('/auth/logout',{method:'POST'}); for(const key of Object.keys(localStorage))if(key.startsWith('fse-draft:'))localStorage.removeItem(key); removeAuthToken(); location.assign('login.html'); }
+ catch(error) { alert('Nie udało się wylogować na serwerze. '+error.message); }
+}

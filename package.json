@@ -7,7 +7,7 @@
     "dev": "bash scripts/dev-local.sh",
     "seed:demo": "node scripts/seed-demo.js",
     "start": "node coreFSE.js",
-    "test": "node --test tests/unit.test.js tests/demo-materials.test.js tests/security.test.js tests/api-boundaries.test.js",
+    "test": "node --test tests/unit.test.js tests/demo-materials.test.js tests/security.test.js tests/api-boundaries.test.js tests/learning.test.js",
     "test:integration": "node --test tests/integration.test.js",
     "test:restore": "node scripts/test-backup-restore.js",
     "migrate": "node scripts/migrate.js",

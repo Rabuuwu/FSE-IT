@@ -15,7 +15,7 @@ def tokens(material):
     return Counter(words)
 
 
-def recommend(materials, activity, limit=5):
+def recommend(materials, activity, limit=5, interests=None):
     materials = sorted(materials, key=lambda item: item["id"])
     by_id = {item["id"]: item for item in materials}
     # UNION in Core can produce both viewed and rated records; a rating wins.
@@ -34,7 +34,7 @@ def recommend(materials, activity, limit=5):
         vector = {word: (1 + log(n)) * (1 + log((1 + len(materials)) / (1 + frequencies[word]))) for word, n in count.items()}
         norm = sqrt(sum(value * value for value in vector.values())) or 1
         vectors[key] = {word: value / norm for word, value in vector.items()}
-    profile = Counter()
+    profile = Counter({f"tag:{tag.lower()}": 1.0 for tag in (interests or [])})
     for key, rating in history.items():
         if key not in by_id:
             continue

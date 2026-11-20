@@ -25,7 +25,7 @@ All account routes require a current authenticated session and select the accoun
 | `PUT /account/password` | `{current_password,new_password}` | Requires a different valid password (10+characters, at most72UTF-8bytes). Revokes every session including caller; sign in again. |
 | `DELETE /account` | `{current_password,confirmation:"USUŃ KONTO"}` | 204. Deletes own unpublished materials and account, cascades private resources/activity/comments; published material remains without account association. Public author/content text is retained. Last administrator409. |
 
-Missing/invalid input400; incorrect current password403; conflicting email or last administrator409; expired/revoked session401. Sensitive writes share20/minute authentication budget. Transactions lock the current account and revalidate session/password before mutation. Migration006 and JWT session version prevent old tokens from authorizing actions after a password change. Legacy tokens without the claim represent version0 until rotation. Readiness/startup require006. There is no public endpoint for changing another account or assigning roles. Email verification and recovery are not supplied by these endpoints.
+Missing/invalid input400; incorrect current password403; conflicting email or last administrator409; expired/revoked session401. Sensitive writes share20/minute authentication budget. Transactions lock the current account and revalidate session/password before mutation. Migration006 and JWT session version prevent old tokens from authorizing actions after a password change. Legacy tokens without the claim represent version0 until rotation. Readiness/startup require006. There is no public endpoint for changing another account or assigning roles. Email verification and recovery use the separate endpoints in the product expansion section.
 
 ## Shared catalogue and moderation
 
@@ -34,7 +34,7 @@ Missing/invalid input400; incorrect current password403; conflicting email or la
 | `GET /materials?q=&tag=&type=&page=1&limit=20&scope=published` | Public | `{items,total,page,limit}`. Public scope excludes drafts even for their owners; default `scope=all` also includes the signed-in owner's drafts/admin previews. Anonymous reads always exclude unpublished records. Bodies omitted. |
 | `GET /tags` | Public | Tags belonging to visible materials only. |
 | `GET /materials/:id` | Public or owner/admin preview | Body, stages and `my_rating`; inaccessible record returns 404. |
-| `GET /materials/:id/comments` | Public, published record | First 100 comments; writing requires authentication. |
+| `GET /materials/:id/comments` | Public, published record | Paginated comments; writing requires authentication. |
 | `GET /creators/:id` | Public | Public display name and published materials, without email/password. |
 | `POST /materials` | Signed in | Create private, atomically with tags/stages; 201 `{id,revision,publication_status}`. |
 | `PUT /materials/:id` | Owner/admin | Full replacement with current integer `revision`; always becomes private and clears review metadata. |
@@ -82,6 +82,45 @@ Core rechecks ML output against current publication and user history. Timeout/un
 
 ## Legacy compatibility and health
 
-`/resources` remains a private legacy store with GET/POST/DELETE; `/admin/resources` is an admin-only legacy listing. Original `/articles` and `/courses` GET endpoints read the archived tables with owner/admin/publication filtering; POST/PUT/DELETE return 410. The shared catalogue is canonical for editing and publishing; archived read endpoints are not synchronized with its later edits. Old page URLs redirect to the shared catalogue. No reset endpoint is provided.
+`/resources` remains a private legacy store with GET/POST/DELETE; `/admin/resources` is an admin-only legacy listing. Original `/articles` and `/courses` GET endpoints read the archived tables with owner/admin/publication filtering; POST/PUT/DELETE return 410. The shared catalogue is canonical for editing and publishing; archived read endpoints are not synchronized with its later edits. Old page URLs redirect to the shared catalogue. Reset is provided by `/auth/reset/request` and `/auth/actions/confirm` (see below).
 
 `GET /health` is process liveness; `GET /ready` checks database connectivity and latest migration. ML has `GET /health`. No healthcheck should be used to bypass a free provider's idle policy.
+
+## Product expansion (007–009; 2026-11-20)
+
+All endpoints below require Bearer authentication except `/auth/reset/request` and `/auth/actions/confirm`. Owner IDs are always taken from the authenticated identity. List endpoints use `page` and `limit` (1–100, default 20).
+
+| Route | Contract |
+| --- | --- |
+| `GET /learning` | Own published learning items, bookmark/note, completed stage count and next stage. |
+| `GET /learning/:id` | Own bookmark/dismissal/note and current-version progress. |
+| `PATCH /learning/:id` | Optional `bookmarked:boolean`, `dismissed:boolean`, `note:string` (≤10000). |
+| `PUT /learning/:id/progress` | `{position,completed,content_version}`; published course only, stale version409. |
+| `GET/PUT /preferences` | `{interests:string[]}` up to20 tags. |
+| `GET/POST /paths` | Private paths; create `{title,description,material_ids:[integer]}` (1–100 unique published IDs). |
+| `GET/DELETE /paths/:id` | Own path only; unavailable materials omitted. |
+| `GET /notifications` | Own messages; `PUT /notifications/:id/read` marks own notification read. |
+| `POST /materials/:id/report` | `{reason,comment_id?}`; published material, matching comment. |
+| `GET /admin/reports` | Admin unresolved queue; `PUT /admin/reports/:id/resolve`. |
+| `PATCH/DELETE /comments/:id` | Edit own `{body}`; delete own or admin. |
+| `GET /materials/:id/history` | Owner/admin moderation decisions and transitions. |
+| `GET /materials/:id/quiz` | Published questions/options/version without answers or explanations. |
+| `PUT /materials/:id/quiz` | Admin explicit publication: `{questions:[{text,options,answer,explanation}]}` up to30; new version. |
+| `POST /materials/:id/quiz/attempts` | `{version,answers:[zero-based index]}`; server grading, feedback, saved attempt. Practice quiz permits repeats; no certificate/skill claim. |
+| `GET /author/report` | Own material aggregates, never individual learners' identities. |
+| `GET /account/export` | Own account, materials/stages, private legacy data, learning, paths, preferences, revisions, ratings, comments, attempts; no hashes/tokens or other users' data. |
+| `GET/PUT /materials/:id/revision` | Owner/admin private next publication. PUT uses normal material payload, current material `revision` and existing `draft_revision` when present. |
+| `POST /materials/:id/revision/submit` | `{revision}` is the draft revision. Keeps existing publication visible. |
+| `GET /admin/revisions` | Admin pending publication revision queue, including draft payload for review. |
+| `POST /admin/materials/:id/revision/review` | `{revision,decision,note}`; pending draft and unchanged base version required. |
+| `GET /materials/:id/versions` | Owner/admin archived published snapshots (paginated). |
+| `GET /account/email` | Verification, mail configuration and own latest active delivery status/error. |
+| `POST /account/email/request` | Queue verification to current account email. |
+| `POST /auth/reset/request` | `{email}`; generic202 for known/unknown/unverified addresses;503 when mail not configured. |
+| `POST /auth/actions/confirm` | `{purpose:"verify"|"reset",token,password?}`; reset requires password; single-use/30minutes. |
+| `POST /auth/logout` | Revoke current JWT digest server-side. |
+| `POST /auth/logout-all` | Increment account session version, revoking all current sessions. |
+
+Materials now accept `metadata:{level,language,minutes,prerequisites,technology_version,outdated}`. Level: empty/beginner/intermediate/advanced; duration null or1–10000; limits40/2000/100 for language/prerequisites/version. `GET /materials` adds `sort=newest|rating|relevance` (relevance prioritizes title matches). Comments and creator listings now paginate with default20.
+
+The existing direct material PUT retains its unpublish-on-edit behavior for compatibility. The browser editor uses `/revision` for published material so publication is preserved. Course content_version increments on replacement; progress for older content remains private history, not current completion. Views never mark progress. Archived snapshots are not publicly exposed. Explicit interests influence Python TF-IDF profile; dismissed items are removed from both ML candidates and Core fallback/rechecks.

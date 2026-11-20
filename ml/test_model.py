@@ -42,3 +42,10 @@ class ModelTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class PreferenceTests(unittest.TestCase):
+    def test_declared_interests_influence_cold_start(self):
+        materials=[{"id":1,"title":"Other","tags":["java"],"average_rating":5}, {"id":2,"title":"Python","tags":["python"]}]
+        result=recommend(materials, [], interests=["python"])
+        self.assertEqual(result["mode"],"personalized")
+        self.assertEqual(result["items"][0]["id"],2)
